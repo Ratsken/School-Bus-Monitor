@@ -1,0 +1,186 @@
+# apps/accounts/models.py
+from django.contrib.auth.models import AbstractUser, Group, Permission
+from django.db import models
+from django.contrib.contenttypes.models import ContentType
+
+class CustomUser(AbstractUser):
+    ROLE_CHOICES = (
+        ('superuser', 'Superuser'),
+        ('admin', 'School Administrator'),
+        ('driver', 'Driver'),
+        ('parent', 'Parent'),
+        ('staff', 'Staff'),
+    )
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='parent')
+    phone_number = models.CharField(max_length=20, blank=True, null=True) # For SMS notifications
+
+    # Add related_name to avoid clashes with auth.User groups and user_permissions
+    groups = models.ManyToManyField(
+        Group,
+        verbose_name='groups',
+        blank=True,
+        help_text='The groups this user belongs to. A user will get all permissions granted to each of their groups.',
+        related_name="custom_user_set",
+        related_query_name="custom_user",
+    )
+    user_permissions = models.ManyToManyField(
+        Permission,
+        verbose_name='user permissions',
+        blank=True,
+        help_text='Specific permissions for this user.',
+        related_name="custom_user_set",
+        related_query_name="custom_user",
+    )
+
+    def __str__(self):
+        return self.username
+
+    class Meta:
+        verbose_name = 'User' # Change verbose name in admin
+
+class Bus(models.Model):
+    STATUS_CHOICES = (
+        ('active', 'Active'),
+        ('in_maintenance', 'In Maintenance'),
+        ('out_of_commission', 'Out of Commission'),
+        ('delayed', 'Delayed'),
+    )
+    bus_number = models.CharField(max_length=50, unique=True)
+    driver = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_buses')
+    capacity = models.IntegerField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    last_known_latitude = models.FloatField(null=True, blank=True)
+    last_known_longitude = models.FloatField(null=True, blank=True)
+
+    def __str__(self):
+        return self.bus_number
+
+    class Meta:
+        app_label = 'core'
+        verbose_name_plural = "Buses"
+        permissions = [
+            ("can_assign_driver", "Can assign a driver to a bus"),
+            ("can_update_maintenance_status", "Can update bus maintenance status"),
+        ]
+
+class Route(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    bus = models.OneToOneField(Bus, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_route')
+    # Add fields for schedule (e.g., start_time, end_time), estimated_duration, etc.
+    # Example:
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        permissions = [
+            ("can_assign_bus_to_route", "Can assign a bus to a route"),
+        ]
+
+
+class Student(models.Model):
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    parent = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='children')
+    assigned_route = models.ForeignKey(Route, on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
+    # Add fields for student ID, grade, etc.
+    student_id = models.CharField(max_length=50, unique=True, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name}"
+
+    class Meta:
+        permissions = [
+            ("can_assign_student_to_route", "Can assign a student to a route"),
+            ("can_view_student_details", "Can view detailed student information"),
+        ]
+
+
+class BusLocation(models.Model):
+    bus = models.ForeignKey(Bus, on_delete=models.CASCADE)
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    speed = models.FloatField(null=True, blank=True)  # Add this line
+
+    def __str__(self):
+        return f"{self.bus.bus_number} at ({self.latitude}, {self.longitude})"
+    class Meta:
+        ordering = ['-timestamp']
+        permissions = [
+            ("can_view_bus_location", "Can view real-time bus locations"),
+            ("can_submit_bus_location", "Can submit bus location data"),
+        ]
+
+class Notification(models.Model):
+    TYPE_CHOICES = (
+        ('alert', 'Alert'),
+        ('info', 'Information'),
+        ('maintenance', 'Maintenance Update'),
+        ('delay', 'Delay Notification'),
+    )
+    CHANNEL_CHOICES = (
+        ('email', 'Email'),
+        ('sms', 'SMS'),
+        ('system', 'System Notification'),
+    )
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('sent', 'Sent'),
+        ('failed', 'Failed'),
+        ('in_progress', 'In Progress'), # Added for threading status
+    )
+
+    bus = models.ForeignKey(Bus, on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
+    sender = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='sent_notifications')
+    # Using recipient_group for broad targeting, or specific users/parents
+    recipient_group = models.CharField(max_length=20, choices=CustomUser.ROLE_CHOICES, blank=True, null=True)
+    recipients = models.ManyToManyField(CustomUser, related_name='received_notifications', blank=True) # For specific recipients
+
+    subject = models.CharField(max_length=255)
+    message = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    notification_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='info')
+    sent_via = models.CharField(max_length=50, choices=CHANNEL_CHOICES, default='system')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    last_attempt = models.DateTimeField(null=True, blank=True)
+    retry_count = models.IntegerField(default=0)
+
+    def __str__(self):
+        return f"Notification: {self.subject} ({self.status})"
+
+    class Meta:
+        ordering = ['-timestamp']
+        permissions = [
+            ("can_send_notification", "Can send notifications to user groups"),
+            ("can_view_notifications", "Can view sent and received notifications"),
+        ]
+
+class Concern(models.Model):
+    STATUS_CHOICES = (
+        ('open', 'Open'),
+        ('in_progress', 'In Progress'),
+        ('closed', 'Closed'),
+    )
+    raised_by = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='concerns_raised')
+    bus = models.ForeignKey(Bus, on_delete=models.SET_NULL, null=True, blank=True, related_name='concerns')
+    subject = models.CharField(max_length=255)
+    description = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
+    resolved_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='concerns_resolved')
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolution_notes = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Concern: {self.subject} ({self.status})"
+
+    class Meta:
+        ordering = ['-timestamp']
+        permissions = [
+            ("can_view_all_concerns", "Can view all raised concerns"),
+            ("can_manage_concerns", "Can change status and resolve concerns"),
+        ]
+

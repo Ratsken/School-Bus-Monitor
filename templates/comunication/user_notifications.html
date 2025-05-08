@@ -1,0 +1,32 @@
+{% extends 'base.html' %} {# Extend your base template #}
+{% load static %}
+
+{% block title %}{{ site_title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>My Notifications</h2>
+
+    {% if notifications %}
+        <div class="list-group">
+            {% for notification in notifications %}
+                <div class="list-group-item list-group-item-action flex-column align-items-start">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h5 class="mb-1">{{ notification.subject }}</h5>
+                        <small>{{ notification.timestamp|date:"Y-m-d H:i" }}</small>
+                    </div>
+                    <p class="mb-1">{{ notification.message }}</p>
+                    <small>
+                        Type: {{ notification.get_notification_type_display }} |
+                        Sent Via: {{ notification.get_sent_via_display }} |
+                        Status: {{ notification.get_status_display }}
+                        {% if notification.bus %} | Bus: {{ notification.bus.bus_number }}{% endif %}
+                    </small>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p>You have no notifications.</p>
+    {% endif %}
+</div>
+{% endblock %}

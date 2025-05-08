@@ -1,0 +1,111 @@
+<!-- templates/dashboard/driver_update.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header">
+            <h4>Update Bus Location</h4>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div id="driverMap" style="height: 400px;"></div>
+                </div>
+                <div class="col-md-6">
+                    <form id="locationForm">
+                        <div class="mb-3">
+                            <label class="form-label">Bus</label>
+                            <select class="form-select" id="busSelect" required>
+                                <option value="">Select your bus</option>
+                                {% for bus in request.user.assigned_buses.all %}
+                                    <option value="{{ bus.id }}">{{ bus.bus_number }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Current Location</label>
+                            <div class="input-group">
+                                <span class="input-group-text">Lat</span>
+                                <input type="number" step="0.000001" class="form-control" id="latitude" required>
+                                <span class="input-group-text">Lng</span>
+                                <input type="number" step="0.000001" class="form-control" id="longitude" required>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Speed (km/h)</label>
+                            <input type="number" class="form-control" id="speed" value="0">
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-location-arrow me-1"></i> Update Location
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extrajs %}
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize map
+        const map = L.map('driverMap').setView(API_CONFIG.mapCenter, 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        
+        let marker;
+        
+        // Click handler for map
+        map.on('click', function(e) {
+            if (!marker) {
+                marker = L.marker(e.latlng).addTo(map)
+                    .bindPopup("Bus location").openPopup();
+            } else {
+                marker.setLatLng(e.latlng);
+            }
+            
+            document.getElementById('latitude').value = e.latlng.lat.toFixed(6);
+            document.getElementById('longitude').value = e.latlng.lng.toFixed(6);
+        });
+        
+        // Form submission
+        document.getElementById('locationForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const busId = document.getElementById('busSelect').value;
+            const lat = document.getElementById('latitude').value;
+            const lng = document.getElementById('longitude').value;
+            const speed = document.getElementById('speed').value;
+            
+            try {
+                const response = await fetch(`${API_CONFIG.baseUrl}/api/locations/current/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': API_CONFIG.csrfToken
+                    },
+                    body: JSON.stringify({
+                        bus_id: busId,
+                        latitude: lat,
+                        longitude: lng,
+                        speed: speed
+                    })
+                });
+                
+                if (response.ok) {
+                    alert('Location updated successfully!');
+                } else {
+                    const error = await response.json();
+                    alert(`Error: ${error.error || 'Failed to update location'}`);
+                }
+            } catch (err) {
+                console.error('Error:', err);
+                alert('Failed to update location');
+            }
+        });
+    });
+</script>
+{% endblock %}

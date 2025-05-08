@@ -1,0 +1,58 @@
+/* static/css/style.css */
+/* Add your general project styles here */
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+main {
+    flex: 1;
+}
+
+.footer {
+    background-color: #f8f9fa; /* Light gray background */
+    padding: 20px;
+    text-align: center;
+    font-size: 14px;
+    color: #6c757d; /* Gray text color */
+    border-top: 1px solid #dee2e6; /* Light gray border */
+}
+
+/* Optional: add header specific styles */
+header {
+    background-color: #343a40; /* Dark gray background */
+    color: white; /* White text color */
+    padding: 10px 20px;
+    text-align: center;
+    font-size: 24px;
+}
+
+/* Optional: add main content specific styles */
+main {
+    padding: 20px;
+    background-color: #ffffff; /* White background */
+    color: #212529; /* Dark gray text color */
+    font-size: 16px;
+}
+
+/* Optional: add sidebar specific styles */
+.sidebar {
+    background-color: #f8f9fa; /* Light gray background */
+    padding: 20px;
+    border-right: 1px solid #dee2e6; /* Light gray border */
+}
+
+/* Optional: add card specific styles */
+.card {
+    border-radius: 10px; /* Rounded corners */
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Subtle shadow */
+    transition: transform 0.2s; /* Smooth transition for hover effect */
+}
+.card:hover {
+    transform: translateY(-5px); /* Lift effect on hover */
+}
+.card-title {
+    font-weight: bold; /* Bold title */
+    font-size: 18px; /* Larger font size */
+}
