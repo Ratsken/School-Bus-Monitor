@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Bus Tracking - School Bus Management{% endblock %}
+
+{% block extra_css %}
+<link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css " rel="stylesheet">
+<style>
+    #mapid {
+        height: 500px; /* Set a fixed height for the map */
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-sm-flex align-items-center justify-content-between mb-4">
+    <h1 class="h3 mb-0 text-gray-800">Live Bus Tracking</h1>
+</div>
+
+<!-- Map Section -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-map-marker-alt me-2"></i> Bus Map</h6>
+            </div>
+            <div class="card-body">
+                <div id="mapid"></div>
+                <div class="mt-2 text-muted">
+                    <small>Last updated: <span id="lastUpdated" class="font-weight-bold">Just now</span></small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Buses List -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-bus me-2"></i> Active Buses</h6>
+            </div>
+            <div class="card-body">
+                {% if buses %}
+                <div class="table-responsive">
+                    <table class="table table-bordered" id="busTable" width="100%" cellspacing="0">
+                        <thead>
+                            <tr>
+                                <th>Bus Number</th>
+                                <th>Route</th>
+                                <th>Status</th>
+                                <th>Last Reported Location</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for bus in buses %}
+                            <tr>
+                                <td><strong>{{ bus.bus_number }}</strong></td>
+                                <td>{{ bus.route.name|default:"N/A" }}</td>
+                                <td>
+                                    <span class="badge bg-{% if bus.status == 'active' %}success{% elif bus.status == 'delayed' %}warning{% else %}secondary{% endif %}">
+                                        {{ bus.status|capfirst }}
+                                    </span>
+                                </td>
+                                <td id="last-location-{{ bus.id }}">Loading location...</td>
+                                <td>
+                                    {% if user.role == 'admin' or user.role == 'driver' %}
+                                    <button 
+                                        class="btn btn-success btn-sm start-trip-btn" 
+                                        data-bus-id="{{ bus.id }}"
+                                        {% if bus.status != 'inactive' %}disabled{% endif %}
+                                    >
+                                        <i class="fas fa-play me-2"></i> Start Trip
+                                    </button>
+                                    <button 
+                                        class="btn btn-danger btn-sm stop-trip-btn" 
+                                        data-bus-id="{{ bus.id }}"
+                                        {% if bus.status != 'active' %}disabled{% endif %}
+                                    >
+                                        <i class="fas fa-stop me-2"></i> Stop Trip
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="card-text">No active buses to display.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

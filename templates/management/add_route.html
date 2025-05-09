@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Add Bus - School Bus Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Add Bus</h6>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="id_bus_number" class="form-label">Bus Number</label>
+                        <input type="text" class="form-control" id="id_bus_number" name="bus_number" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_capacity" class="form-label">Capacity</label>
+                        <input type="number" class="form-control" id="id_capacity" name="capacity" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_status" class="form-label">Status</label>
+                        <select class="form-select" id="id_status" name="status" required>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="in_maintenance">In Maintenance</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_driver" class="form-label">Driver</label>
+                        <select class="form-select" id="id_driver" name="driver">
+                            <option value="">-- Select Driver --</option>
+                            {% for driver in drivers %}
+                            <option value="{{ driver.id }}">{{ driver.get_full_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_route" class="form-label">Route</label>
+                        <select class="form-select" id="id_route" name="route">
+                            <option value="">-- Select Route --</option>
+                            {% for route in routes %}
+                            <option value="{{ route.id }}">{{ route.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Bus</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

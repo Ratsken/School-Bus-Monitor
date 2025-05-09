@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Edit Student - School Bus Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Edit Student</h6>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="id_student_id" class="form-label">Student ID</label>
+                        <input type="text" class="form-control" id="id_student_id" name="student_id" value="{{ form.initial.student_id }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_user" class="form-label">User Account</label>
+                        <select class="form-select" id="id_user" name="user" required>
+                            <option value="">-- Select User --</option>
+                            {% for user in users %}
+                            <option value="{{ user.id }}" {% if form.initial.user == user.id %}selected{% endif %}>{{ user.get_full_name }} ({{ user.username }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_parent" class="form-label">Parent</label>
+                        <select class="form-select" id="id_parent" name="parent" required>
+                            <option value="">-- Select Parent --</option>
+                            {% for parent in parents %}
+                            <option value="{{ parent.id }}" {% if form.initial.parent == parent.id %}selected{% endif %}>{{ parent.get_full_name }} ({{ parent.username }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_route" class="form-label">Assigned Route</label>
+                        <select class="form-select" id="id_route" name="route">
+                            <option value="">-- Select Route --</option>
+                            {% for route in routes %}
+                            <option value="{{ route.id }}" {% if form.initial.route == route.id %}selected{% endif %}>{{ route.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_school" class="form-label">School</label>
+                        <input type="text" class="form-control" id="id_school" name="school" value="{{ form.initial.school }}">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Update Student</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

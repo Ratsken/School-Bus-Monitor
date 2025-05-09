@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}My Concerns - School Bus Management{% endblock %}
+{% block content %}
+<div class="d-sm-flex align-items-center justify-content-between mb-4">
+    <h1 class="h3 mb-0 text-gray-800">My Concerns{% if user.role == 'admin' %} / All Concerns{% endif %}</h1>
+    </div>
+    <div class="row">
+    <div class="col-md-12 grid-margin stretch-card"> {# Applied grid-margin and stretch-card from Master File #}
+        <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-question-circle me-2"></i> List
+            of Concerns</h6>
+        </div>
+        <div class="card-body">
+            {% if concerns %}
+            <div class="table-responsive">
+                <table class="table table-bordered" id="concernsTable" width="100%" cellspacing="0">
+                <thead>
+                    <tr>
+                    <th>Subject</th>
+                    {% if user.role == 'admin' %}<th>Raised By</th>{% endif %}
+                    <th>Related Bus</th>
+                    <th>Status</th>
+                    <th>Timestamp</th>
+                    <th>Actions</th> {# Optional: Add links to view/resolve concern #}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for concern in concerns %}
+                    <tr>
+                        <td>{{ concern.subject }}</td>
+                        {% if user.role == 'admin' %}<td>{{ concern.raised_by.username }}</td>
+                        {% endif %}
+                        <td>{{ concern.bus.bus_number|default:"N/A" }}</td>
+                        <td><span class="badge bg-secondary">{{ concern.status|capfirst }}
+                        </span></td> {# Use Bootstrap badge #}
+                        <td>{{ concern.timestamp|date:"Y-m-d H:i" }}</td>
+                        <td>
+                        {# Add action links here #}
+                        <a href="#" class="btn btn-info btn-sm"> {# Using info button #}
+                            <i class="fas fa-eye me-1"></i> View
+                        </a>
+                        {% if user.role == 'admin' and concern.status != 'closed' %}
+                            <a href="#" class="btn btn-success btn-sm"> {# Using success button #}
+                            <i class="fas fa-check-circle me-1"></i> Resolve
+                            </a>
+                        {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="card-text">No concerns found.</p>
+            {% endif %}
+        </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

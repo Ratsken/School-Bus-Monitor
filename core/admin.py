@@ -1,4 +1,4 @@
-# apps/accounts/admin.py
+# core/admin.py
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from .models import Bus, BusLocation, Concern, CustomUser, Notification, Route, Student

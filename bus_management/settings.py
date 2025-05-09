@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 from django.contrib import messages
+from django.urls import reverse_lazy # Import reverse_lazy
 
 # SESSION_COOKIE_SECURE = True
 
@@ -62,6 +63,7 @@ INSTALLED_APPS = [
     'django_filters',
     'drf_yasg',
     'core',
+    'widget_tweaks',
 ]
 
 SITE_ID = 1
@@ -148,8 +150,8 @@ SWAGGER_SETTINGS = {
             'in': 'header'
         }
     },
-    'LOGIN_URL': 'admin:login',
-    'LOGOUT_URL': 'admin:logout',
+    'LOGIN_URL': 'core:login',
+    'LOGOUT_URL': 'core:logout',
     'USE_SESSION_AUTH': True,
 }
 
@@ -177,7 +179,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = 'Asia/Dubai'
+TIME_ZONE = 'Asia/Dubai'  # Set to your desired timezone
 
 USE_I18N = True
 
@@ -209,86 +211,63 @@ MEDIA_ROOT = BASE_DIR / 'media' # Store user-uploaded files here
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Django Jazzmin Settings (Deep Personalization)
+# --- Authentication Settings ---
+LOGIN_URL = reverse_lazy('core:login') # URL name for the login page
+LOGOUT_REDIRECT_URL = reverse_lazy('core:login') # Where to go after logout
+LOGIN_REDIRECT_URL = reverse_lazy('core:dashboard') # <<<--- ADD THIS LINE: Where to go after successful login
+
+# Django Jazzmin Settings (Admin theme customization)
 JAZZMIN_SETTINGS = {
     "site_title": "School Bus Monitor",
     "site_header": "Modern International School",
     "site_brand": "Bus Monitoring",
-    "site_icon": "/static/img/bus_logo.png",  # Ensure you have a logo here
+    "site_icon": "img/school_logo.png",  # Relative path within static files
     "welcome_sign": "Welcome to the School Bus Monitoring System",
     "copyright": "Modern International School",
     "show_sidebar": True,
     "navigation_expanded": True,
-    "hide_apps": [],  # Dynamically controlled by permissions in admin.py
-    "hide_models": [],  # Dynamically controlled by permissions in admin.py
-    "order_with_respect_to": ["accounts", "buses", "routes", "students", "tracking", "communication"],
-
-    # Custom CSS for extra flair
-    "custom_css": "/css/admin_custom.css",
-
-    # Custom JS if needed
+    "hide_apps": [],
+    "hide_models": [],
+    "order_with_respect_to": ["core", "auth"], # Adjust app order as needed
+    "custom_css": "css/admin_custom.css", # Relative path within static files
     "custom_js": None,
-
-    # Use Google Fonts CDN for better typography
     "use_google_fonts_cdn": True,
-
-    # Form format settings
-    "changeform_format": "horizontal_tabs",  # Use tabs for forms
-    "changeform_format_overrides": {"auth.user": "vertical_tabs"},
-
-    # Theme customization - Choose a vibrant theme
+    "changeform_format": "horizontal_tabs",
+    "changeform_format_overrides": {"auth.user": "collapsible", "auth.group": "vertical_tabs"}, # Example overrides
     "show_ui_tweaks": True,
-    "theme": "flatly",  # A vibrant, professional theme (explore others like 'cosmo', 'lumen', 'simplex')
-
-    # Adding a custom dashboard view
-    "index_title": "Dashboard",  # Set the admin index title
-    "main_url": "/",  # Link to the custom dashboard view (overridden in urls.py)
-
-    # Enhanced color palette for cards/elements
-    "colors": {
-        "primary": "#0d6efd",  # Vibrant blue for primary actions
-        "secondary": "#6c757d",  # Neutral gray for secondary actions
-        "success": "#198754",  # Green for success messages
-        "danger": "#dc3545",  # Red for errors or warnings
-        "warning": "#ffc107",  # Yellow for warnings
-        "info": "#0dcaf0",  # Teal for informational messages
-        "light": "#f8f9fa",  # Light background
-        "dark": "#212529",  # Dark text or borders
-
-        # Custom branding colors
-        "brand_blue": "#0d6efd",  # Brand-specific blue
-        "brand_green": "#198754",  # Brand-specific green
-        "brand_orange": "#fd7e14",  # Brand-specific orange
-    },
+    "theme": "flatly", # Example theme
+    "dark_mode_theme": "darkly", # Optional dark mode theme
+    "button_classes": { # Consistent button styling
+        "primary": "btn-primary",
+        "secondary": "btn-secondary",
+        "info": "btn-info",
+        "warning": "btn-warning",
+        "danger": "btn-danger",
+        "success": "btn-success"
+    }
 }
-
-JAZZMIN_UI_TWEAKS = {
+JAZZMIN_UI_TWEAKS = { # Fine-tune Jazzmin UI elements
     "navbar_small_text": False,
     "footer_small_text": False,
     "body_small_text": False,
     "brand_small_text": False,
-
-    # Navbar styling
-    "brand_colour": "navbar-light",  # Match navbar color to theme
-    "layout_boxed": False,  # Full-width layout
-    "layout_fixed_sidebar": True,  # Fixed sidebar for better navigation
-    "layout_fixed_navbar": True,  # Fixed navbar at the top
-    "layout_fixed_footer": False,  # Footer is not fixed
-
-    # Sidebar styling
-    "sidebar_non_expandable_links": False,  # Allow sidebar links to expand
-    "sidebar_boxed": False,  # Full-width sidebar
-    "sidebar_collapse": False,  # Do not collapse the sidebar by default
-    "sidebar_nav_small_text": False,  # Normal-sized text in the sidebar
-    "sidebar_nav_child_indent": True,  # Indent child items for better hierarchy
-    "sidebar_nav_compact_style": False,  # Standard spacing for sidebar items
-    "sidebar_nav_legacy_style": False,  # Modern sidebar style
-    "sidebar_nav_flat_style": False,  # Rounded corners for sidebar items
-
-    # Theme settings
-    "theme": "flatly",  # Ensure this matches JAZZMIN_SETTINGS['theme']
-
-    # Button classes
+    "brand_colour": False, # Let theme control navbar color
+    "accent": "accent-primary",
+    "navbar": "navbar-white navbar-light",
+    "no_navbar_border": False,
+    "navbar_fixed": True,
+    "layout_boxed": False,
+    "footer_fixed": False,
+    "sidebar_fixed": True,
+    "sidebar": "sidebar-dark-primary", # Sidebar color scheme
+    "sidebar_nav_small_text": False,
+    "sidebar_disable_expand": False,
+    "sidebar_nav_child_indent": True, # Indent sub-menu items
+    "sidebar_nav_compact_style": False,
+    "sidebar_nav_legacy_style": False,
+    "sidebar_nav_flat_style": False,
+    "theme": "flatly", # Ensure consistency
+    "dark_mode_theme": "darkly",
     "button_classes": {
         "primary": "btn-primary",
         "secondary": "btn-secondary",
@@ -297,34 +276,14 @@ JAZZMIN_UI_TWEAKS = {
         "danger": "btn-danger",
         "success": "btn-success"
     },
-
-    # Input and select styles
-    "input_classes": "form-control",
-    "select_classes": "form-select",
-
-    # Modal styles
-    "modal_classes": {
-        "modal-dialog": "modal-dialog-centered",  # Center modals vertically
-        "modal-content": "modal-content",
-        "modal-header": "modal-header",
-        "modal-body": "modal-body",
-        "modal-footer": "modal-footer"
-    },
-
-    # Card styles
-    "card_classes": "card",  # Use Bootstrap card class
-    "card_outline": "card-outline-primary",  # Example card outline color
-    "card_styling": "card-primary",  # Example card background color (can be overridden in templates)
+    "actions_sticky_top": True # Keep admin actions bar sticky
 }
 
 # Django Redis Cache Settings
 CACHES = {
     "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://127.0.0.1:6379/1", # Update with your Redis server details
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        }
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": BASE_DIR / "cache",
     }
 }
 

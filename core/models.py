@@ -51,10 +51,18 @@ class Bus(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     last_known_latitude = models.FloatField(null=True, blank=True)
     last_known_longitude = models.FloatField(null=True, blank=True)
+    last_known_location_time = models.DateTimeField(null=True, blank=True)
+    last_maintenance_date = models.DateField(null=True, blank=True)
+    next_maintenance_due = models.DateField(null=True, blank=True)
+    maintenance_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
 
     def __str__(self):
         return self.bus_number
-
+    @property
+    def route(self):
+        """Helper property to get the route associated with this bus."""
+        return Route.objects.filter(bus=self).first()
+    
     class Meta:
         app_label = 'core'
         verbose_name_plural = "Buses"
@@ -78,7 +86,6 @@ class Route(models.Model):
         permissions = [
             ("can_assign_bus_to_route", "Can assign a bus to a route"),
         ]
-
 
 class Student(models.Model):
     first_name = models.CharField(max_length=100)

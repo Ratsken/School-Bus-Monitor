@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}Notifications - School Bus Management{% endblock %}
+{% block content %}
+<div class="d-sm-flex align-items-center justify-content-between mb-4">
+    <h1 class="h3 mb-0 text-gray-800">Notifications</h1>
+    </div>
+    <div class="row">
+    <div class="col-md-12 grid-margin stretch-card"> {# Applied grid-margin and stretch-card from Master File #}
+        <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-bell me-2"></i> Your Notifications</h6>
+        </div>
+        <div class="card-body">
+            {% if notifications %}
+            <div class="table-responsive">
+                <table class="table table-bordered" id="notificationTable" width="100%"
+                cellspacing="0">
+                <thead>
+                    <tr>
+                    <th>Subject</th>
+                    <th>Message</th>
+                    <th>Type</th>
+                    <th>Bus</th>
+                    <th>Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for notification in notifications %}
+                    <tr>
+                        <td><strong>{{ notification.subject }}</strong></td>
+                        <td>{{ notification.message }}</td>
+                        <td><span class="badge bg-info">{{
+                            notification.notification_type|capfirst }}</span></td> {# Use Bootstrap badge #}
+                        <td>{{ notification.bus.bus_number|default:"N/A" }}</td>
+                        <td>{{ notification.timestamp|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="card-text">No notifications found.</p>
+            {% endif %}
+        </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}{% endblock %}

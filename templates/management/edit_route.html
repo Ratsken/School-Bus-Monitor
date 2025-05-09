@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Edit Route - School Bus Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Edit Route</h6>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="id_name" class="form-label">Route Name</label>
+                        <input type="text" class="form-control" id="id_name" name="name" value="{{ form.initial.name }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_description" class="form-label">Description</label>
+                        <textarea class="form-control" id="id_description" name="description">{{ form.initial.description }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_start_point" class="form-label">Start Point</label>
+                        <input type="text" class="form-control" id="id_start_point" name="start_point" value="{{ form.initial.start_point }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_end_point" class="form-label">End Point</label>
+                        <input type="text" class="form-control" id="id_end_point" name="end_point" value="{{ form.initial.end_point }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_stops" class="form-label">Stops (Comma-separated)</label>
+                        <input type="text" class="form-control" id="id_stops" name="stops" value="{{ form.initial.stops }}">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Update Route</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

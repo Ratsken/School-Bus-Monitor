@@ -1,76 +1,412 @@
-{% extends "admin:base_site.html" %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
 
-{% block content %}
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="{% url 'admin:index' %}">
-                <img src="{% static 'img/bus_logo.png' %}" alt="Logo" height="30" class="d-inline-block align-text-top">
-                School Bus Monitor
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <!-- base.html -->
-                <!-- Update the navigation links to use core: namespace -->
-                <ul class="navbar-nav ms-auto">
-                    {% if request.user.is_authenticated %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'core:user_notifications' %}">Notifications</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'core:user_concerns' %}">My Concerns</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'core:raise_concern' %}">Raise Concern</a>
-                        </li>
-                        {% if request.user.role == 'driver' %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'core:driver_update' %}">Update Location</a>
-                        </li>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>{% block title %}{% endblock %}</title> {# Updated title #}
+    <link rel="stylesheet" href="{% static 'vendors/feather/feather.css' %}">
+    <link rel="stylesheet" href="{% static 'vendors/ti-icons/css/themify-icons.css' %}">
+    <link rel="stylesheet" href="{% static 'vendors/css/vendor.bundle.base.css' %}">
+    <link rel="stylesheet" href="{% static 'vendors/datatables.net-bs4/dataTables.bootstrap4.css' %}">
+    <link rel="stylesheet" href="{% static 'vendors/ti-icons/css/themify-icons.css' %}">
+    <link rel="stylesheet" type="text/css" href="{% static 'js/select.dataTables.min.css' %}">
+    <link rel="stylesheet" href="{% static 'css/vertical-layout-light/style.css' %}">
+    <link rel="shortcut icon" href="{% static 'images/favicon.png' %}" />
+
+    {# Add Font Awesome for icons #}
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" type="text/css">
+    {# Add Mapbox GL JS CSS #}
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
+
+    <!-- Leaflet CSS (Optional) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css " />
+
+    <style>
+        /* Example definitions (should align with your Master File's style.css) */
+        :root {
+          --card-tale: #4747A1;
+          --card-dark-blue: #2D2D50;
+          --card-light-blue: #CED4DA; /* Using a gray from SB Admin 2 for contrast */
+          --card-light-danger: #FF4747;
+          --gray-800: #343a40; /* Define if not in your main style.css */
+          --gray-300: #dee2e6; /* Define if not in your main style.css */
+        }
+        .card.card-tale {
+            background: var(--card-tale);
+            color: white;
+        }
+
+        .card.card-dark-blue {
+            background: var(--card-dark-blue);
+            color: white;
+        }
+
+        .card.card-light-blue {
+            background: var(--card-light-blue);
+            color: var(--gray-800); /* Use dark text on light background */
+        }
+
+        .card.card-light-danger {
+            background: var(--card-light-danger);
+            color: white;
+        }
+
+        /* Ensure map container maintains aspect ratio and fits the card */
+        #mapid {
+            height: 600px; /* Increased height as requested */
+            width: 100%;
+            border: 1px solid var(--gray-300); /* Add border from bus_tracking.html snippet */
+            border-radius: 0.35rem; /* Match card border radius */
+        }
+
+        /* Bus marker styling */
+        .bus-marker {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-color: #4e73df; /* Default blue */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            /* Add a subtle shadow for better visibility on the map */
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        .bus-marker.active {
+            background-color: #1cc88a; /* Green for active buses */
+        }
+
+        .bus-marker.maintenance {
+            background-color: #f6c23e; /* Yellow for maintenance */
+        }
+
+        .bus-marker.inactive {
+            background-color: #e74a3b; /* Red for inactive */
+        }
+    </style>
+</head>
+<body>
+    {% block auth_content %}{% endblock auth_content %}
+    <div class="container-scroller">
+        {# Navbar - Visible for authenticated users #}
+        {% if user.is_authenticated %}
+        <nav class="navbar col-lg-12 col-12 p-0 fixed-top d-flex flex-row">
+            <div class="text-center navbar-brand-wrapper d-flex align-items-center justify-content-center">
+                <a class="navbar-brand brand-logo mr-5" href="{% url 'core:dashboard' %}"><img src="{% static 'img/school_logo.png' %}" class="mr-2" alt="logo"/></a> {# Use Django URL #}
+                <a class="navbar-brand brand-logo-mini" href="{% url 'core:dashboard' %}"><img src="{% static 'img/school_logo.png' %}" alt="logo"/></a> {# Use Django URL #}
+            </div>
+            <div class="navbar-menu-wrapper d-flex align-items-center justify-content-end">
+                <button class="navbar-toggler navbar-toggler align-self-center" type="button" data-toggle="minimize">
+                <span class="icon-menu"></span>
+                </button>
+                <ul class="navbar-nav mr-lg-2">
+                </ul>
+                <ul class="navbar-nav navbar-nav-right">
+
+                <li class="nav-item nav-profile dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-toggle="dropdown" id="profileDropdown">
+                        {# Use dynamic user name and image if available in context #}
+                        <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ user.first_name|default:user.username }}</span>
+                        <i class="fa-solid fa-user-circle fa-lg text-primary"></i> {# Font Awesome profile icon #}
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-right navbar-dropdown" aria-labelledby="profileDropdown">
+                        <form method="post" action="{% url 'core:logout' %}">
+                            {% csrf_token %}
+                            <button type="submit" class="dropdown-item">
+                                <i class="fa-solid fa-sign-out-alt text-danger"></i> Logout
+                            </button>
+                        </form>
+                    </div>
+                </li>
+                
+                <li class="nav-item nav-settings d-none d-lg-flex">
+                    <a class="nav-link" href="#">
+                    <i class="icon-ellipsis"></i>
+                    </a>
+                </li>
+                </ul>
+                <button class="navbar-toggler navbar-toggler-right d-lg-none align-self-center" type="button" data-toggle="offcanvas">
+                <span class="icon-menu"></span>
+                </button>
+            </div>
+        </nav>
+        {% endif %}
+
+        <div class="container-fluid page-body-wrapper">
+        {# Removed Settings panel and Right sidebar sections #}
+
+        {# Sidebar - Visible for authenticated users #}
+        {% if user.is_authenticated %}
+        <nav class="sidebar sidebar-offcanvas" id="sidebar">
+            <ul class="nav">
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'core:dashboard' %}"> {# Use Django URL #}
+                <i class="icon-grid menu-icon"></i>
+                <span class="menu-title">Dashboard</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-toggle="collapse" href="#ui-management" aria-expanded="false" aria-controls="ui-management"> {# Changed ID #}
+                <i class="icon-layout menu-icon"></i>
+                <span class="menu-title">Management</span> {# Changed title #}
+                <i class="menu-arrow"></i>
+                </a>
+                <div class="collapse" id="ui-management"> {# Changed ID #}
+                <ul class="nav flex-column sub-menu">
+                    {% if user.role == 'admin' %} {# Conditional display #}
+                    <li class="nav-item"> <a class="nav-link" href="{% url 'core:manage_buses' %}">Manage Buses</a></li> {# Add URL #}
+                    <li class="nav-item"> <a class="nav-link" href="{% url 'core:manage_routes' %}">Manage Routes</a></li> {# Add URL #}
+                    <li class="nav-item"> <a class="nav-link" href="{% url 'core:manage_users' %}">Manage Users</a></li> {# Add URL #}
+                    <li class="nav-item"> <a class="nav-link" href="{% url 'core:manage_students' %}">Manage Students</a></li> {# Add URL #}
+                    {% endif %}
+                        {% if user.role != 'driver' %} {# Conditional display #}
+                        <li class="nav-item"> <a class="nav-link" href="{% url 'core:bus_tracking' %}">Bus Tracking</a></li> {# Use Django URL #}
                         {% endif %}
-                        {% if request.user.is_staff %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'admin:index' %}">Admin Dashboard</a>
-                        </li>
-                        {% endif %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'admin:logout' %}">Logout</a>
-                        </li>
-                    {% else %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'admin:login' %}">Login</a>
-                        </li>
+                        {% if user.role == 'driver' %} {# Conditional display #}
+                        <li class="nav-item"> <a class="nav-link" href="#">My Trip</a></li> {# Placeholder #}
                     {% endif %}
                 </ul>
+                </div>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-toggle="collapse" href="#ui-communication" aria-expanded="false" aria-controls="ui-communication"> {# Changed ID #}
+                <i class="icon-mail menu-icon"></i> {# Using mail icon #}
+                <span class="menu-title">Communication</span> {# Changed title #}
+                <i class="menu-arrow"></i>
+                </a>
+                <div class="collapse" id="ui-communication"> {# Changed ID #}
+                <ul class="nav flex-column sub-menu">
+                    <li class="nav-item"> <a class="nav-link" href="{% url 'core:user_notifications' %}">Notifications</a></li> {# Use Django URL #}
+                    <li class="nav-item"> <a class="nav-link" href="{% url 'core:user_concerns' %}">View Concerns</a></li> {# Use Django URL #}
+                    <li class="nav-item"> <a class="nav-link" href="{% url 'core:raise_concern' %}">Raise Concern</a></li> {# Use Django URL #}
+                </ul>
+                </div>
+            </li>
+            {# Removed unused menu items #}
+            </ul>
+        </nav>
+        {% endif %}
+
+        <div class="main-panel">
+            <div class="content-wrapper">
+            {% comment %} Display messages {% endcomment %}
+            {% if messages %}
+            <div class="container-fluid mt-3">
+              {% for message in messages %}
+              <div class="alert alert-dismissible fade show alert-{{ message.tags }}" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+              {% endfor %}
             </div>
-        </div>
-    </nav>
+            {% endif %}
 
-    <main>
-        {% block content %}{% endblock %}
-    </main>
 
-    <footer class="footer mt-auto py-3 bg-light">
-        <div class="container text-center">
-            <span class="text-muted">&copy; 2023 Modern International School. All rights reserved.</span>
-        </div>
-    </footer>
+{% block content %} {% endblock %}
 
-    {# Bootstrap 5 JS #}
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</div>
+<footer class="footer">
+<div class="d-sm-flex justify-content-center justify-content-sm-between">
+    <span class="text-muted text-center text-sm-left d-block d-sm-inline-block">Copyright © {% now "Y" %}. School Bus Management System. All rights reserved.</span> {# Updated copyright #}
+</div>
+</footer>
+</div>
+</div>
+</div>
+<script src="{% static 'vendors/js/vendor.bundle.base.js' %}"></script>
+<script src="{% static 'vendors/chart.js/Chart.min.js' %}"></script>
+<script src="{% static 'vendors/datatables.net/jquery.dataTables.js' %}"></script>
+<script src="{% static 'vendors/datatables.net-bs4/dataTables.bootstrap4.js' %}"></script>
+<script src="{% static 'js/dataTables.select.min.js' %}"></script>
+
+<script src="{% static 'js/off-canvas.js' %}"></script>
+<script src="{% static 'js/hoverable-collapse.js' %}"></script>
+<script src="{% static 'js/template.js' %}"></script>
+<script src="{% static 'js/settings.js' %}"></script>
+<script src="{% static 'js/todolist.js' %}"></script>
+    <!-- Mapbox GL JS -->
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js "></script>
+
+    <!-- Leaflet JS (Optional) -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js "></script>
+
+    <!-- Inline Script for Map Initialization -->
     <script>
-        const API_CONFIG = {
-            baseUrl: '{% if settings.DEBUG %}http://{% else %}https://{% endif %}{{ request.get_host }}',
-            endpoints: {
-                locations: '/api/locations/current/',
-                history: '/api/locations/history/'
-            },
-            csrfToken: '{{ csrf_token }}',
-            mapCenter: [25.2048, 55.2708], // UAE coordinates
-            updateInterval: 10000 // 10 seconds
-        };
+        document.addEventListener('DOMContentLoaded', function () {
+            // Initialize the map
+            const map = L.map('map').setView([25.2048, 55.2708], 10); // Default center (Oman), adjust as needed
+        
+            // Add OpenStreetMap tile layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 18,
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+        
+            // Add school locations as markers
+            const schoolLocations = {{ school_locations|safe }};
+            if (schoolLocations) {
+                schoolLocations.forEach((loc) => {
+                    L.marker([loc.lat, loc.lng])
+                        .addTo(map)
+                        .bindPopup(`<b>${loc.name}</b><br>School Location`);
+                });
+            }
+        
+            // Fetch and display live bus locations
+            const buses = {{ buses|safe }};
+            if (buses) {
+                buses.forEach((bus) => {
+                    if (bus.latitude && bus.longitude) {
+                        const coords = [bus.latitude, bus.longitude];
+        
+                        // Create a custom icon for the bus marker
+                        const busIcon = L.divIcon({
+                            className: `bus-marker ${bus.status}`,
+                            html: '<i class="fas fa-bus"></i>', // Font Awesome bus icon
+                            iconSize: [30, 30],
+                            iconAnchor: [15, 15]
+                        });
+        
+                        // Add bus marker to the map
+                        L.marker(coords, { icon: busIcon })
+                            .addTo(map)
+                            .bindPopup(`<b>Bus ${bus.bus_number}</b><br>Status: ${bus.status}`);
+                    } else {
+                        console.warn(`Location data missing for Bus ${bus.bus_number}`);
+                    }
+                });
+            }
+        
+            // Optional: Enable live updates if the toggle is checked
+            const liveTrackingToggle = document.getElementById('liveTrackingToggle');
+            let intervalId;
+        
+            function startLiveUpdates() {
+                intervalId = setInterval(() => {
+                    fetch('/api/live-bus-locations/')
+                        .then((response) => response.json())
+                        .then((data) => {
+                            // Clear existing bus markers
+                            map.eachLayer((layer) => {
+                                if (layer instanceof L.Marker && layer.options.icon?.options.className?.includes('bus-marker')) {
+                                    map.removeLayer(layer);
+                                }
+                            });
+        
+                            // Add updated bus markers
+                            data.forEach((bus) => {
+                                if (bus.latitude && bus.longitude) {
+                                    const coords = [bus.latitude, bus.longitude];
+        
+                                    const busIcon = L.divIcon({
+                                        className: `bus-marker ${bus.status}`,
+                                        html: '<i class="fas fa-bus"></i>',
+                                        iconSize: [30, 30],
+                                        iconAnchor: [15, 15]
+                                    });
+        
+                                    L.marker(coords, { icon: busIcon })
+                                        .addTo(map)
+                                        .bindPopup(`<b>Bus ${bus.bus_number}</b><br>Status: ${bus.status}`);
+                                }
+                            });
+        
+                            // Update the "Last updated" timestamp
+                            document.getElementById('lastUpdated').innerText = new Date().toLocaleTimeString();
+                        })
+                        .catch((error) => console.error('Error fetching live bus locations:', error));
+                }, 10000); // Update every 10 seconds
+            }
+        
+            function stopLiveUpdates() {
+                clearInterval(intervalId);
+            }
+        
+            // Start or stop live updates based on the toggle
+            liveTrackingToggle.addEventListener('change', () => {
+                if (liveTrackingToggle.checked) {
+                    startLiveUpdates();
+                } else {
+                    stopLiveUpdates();
+                }
+            });
+        
+            // Start live updates by default
+            startLiveUpdates();
+        
+            // Helper function to get CSRF token from cookies
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+        
+            // Handle Start Trip Button (Driver Role)
+            document.querySelectorAll('.start-trip-btn').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const busId = button.dataset.busId;
+        
+                    fetch(`/api/bus-trips/${busId}/start/`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken'),
+                            'Content-Type': 'application/json',
+                        },
+                    })
+                        .then((response) => response.json())
+                        .then((data) => {
+                            console.log('Start trip response:', data);
+                            alert(data.status || 'Trip started successfully');
+                            button.disabled = true;
+                            const stopButton = document.querySelector(`button[data-bus-id="${busId}"].stop-trip-btn`);
+                            if (stopButton) stopButton.disabled = false;
+                        })
+                        .catch((error) => console.error('Error starting trip:', error));
+                });
+            });
+        
+            // Handle Stop Trip Button (Driver Role)
+            document.querySelectorAll('.stop-trip-btn').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const busId = button.dataset.busId;
+        
+                    fetch(`/api/bus-trips/${busId}/stop/`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken'),
+                            'Content-Type': 'application/json',
+                        },
+                    })
+                        .then((response) => response.json())
+                        .then((data) => {
+                            console.log('Stop trip response:', data);
+                            alert(data.status || 'Trip stopped successfully');
+                            button.disabled = true;
+                            const startButton = document.querySelector(`button[data-bus-id="${busId}"].start-trip-btn`);
+                            if (startButton) startButton.disabled = false;
+                        })
+                        .catch((error) => console.error('Error stopping trip:', error));
+                });
+            });
+        });
     </script>
-    {% block extrajs %}{% endblock %}
-{% endblock %}
-<!-- Compare this snippet from templates/comunication/user_notifications.html: -->
+
+    {% block extra_js %}
+    {% endblock %}
+</body>
+
+</html>

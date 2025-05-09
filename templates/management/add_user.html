@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Add User - School Bus Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Add User</h6>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="id_username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="id_username" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_first_name" class="form-label">First Name</label>
+                        <input type="text" class="form-control" id="id_first_name" name="first_name">
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_last_name" class="form-label">Last Name</label>
+                        <input type="text" class="form-control" id="id_last_name" name="last_name">
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="id_email" name="email">
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_role" class="form-label">Role</label>
+                        <select class="form-select" id="id_role" name="role" required>
+                            <option value="admin">Admin</option>
+                            <option value="driver">Driver</option>
+                            <option value="parent">Parent</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add User</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

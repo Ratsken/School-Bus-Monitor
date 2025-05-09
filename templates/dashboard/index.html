@@ -1,222 +1,265 @@
-{% extends 'admin/base_site.html' %}
+{% extends "base.html" %}
 {% load static %}
-
-{% block title %}Dashboard | {{ site_title }}{% endblock %}
-
-{% block extrastyle %}
-    {{ block.super }}
-    {% comment %} <link rel="stylesheet" href="{% static 'css/admin_custom.css' %}"> {% endcomment %}
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <link href="https://api.mapbox.com/mapbox-gl-js/v2.10.0/mapbox-gl.css" rel="stylesheet">
-    <style>
-        #map {
-            height: 500px;
-            width: 100%;
-            border-radius: 8px;
-            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-        }
-
-        .stat-card {
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-            border: none;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-        }
-
-        .card-footer {
-            background: rgba(0, 0, 0, 0.05);
-            border-top: none;
-        }
-
-        /* Adjust badge styles for Bootstrap 4 */
-        .badge-status {
-            font-size: 0.85em;
-            padding: 0.35em 0.65em;
-        }
-    </style>
-{% endblock %}
-
+{% load i18n %}
+{% block title %}Dashboard - School Bus Management Dashboard{% endblock %}
+{# This is a Django template for a login page. It uses Bootstrap for styling and includes a background image. #}
+{# The form is designed to be responsive and user-friendly, with error handling for input fields. #}
+{# The template also includes links for password reset and account creation. #}
 {% block content %}
-<div class="container-fluid mt-3">
-    <h1 class="mb-4">System Overview</h1>
-
-    <div class="row g-4">
-        <!-- Total Buses Card -->
-        <div class="col-lg-3 col-md-6 col-sm-12">
-            <div class="card h-100" style="background-color: {{ JAZZMIN_SETTINGS.colors.primary }}; border-left: 4px solid {{ JAZZMIN_SETTINGS.colors.indigo }};">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h5 class="card-title mb-2">Total Buses</h5>
-                            <p class="card-text display-4 mb-0">{{ total_buses }}</p>
-                        </div>
-                        <i class="fas fa-bus fa-3x opacity-50"></i>
-                    </div>
-                </div>
-                <div class="card-footer">
-                    <a href="{% url 'admin:core_bus_changelist' %}" class="d-flex justify-content-between align-items-center">
-                        <span>View All Buses</span>
-                        <i class="fas fa-arrow-circle-right"></i>
-                    </a>
-                </div>
+    <div class="row">
+        <div class="col-md-12 grid-margin">
+        <div class="row">
+            <div class="col-12 col-xl-8 mb-4 mb-xl-0">
+            {# Use dynamic user name #}
+            <h3 class="font-weight-bold">Welcome - {{ user.first_name|default:user.username }}</h3>
+            {# Use dynamic alert count #}
+            <h6 class="font-weight-normal mb-0">All systems are running smoothly! You have <span class="text-primary">{{ unread_alerts_count|default:"0" }} unread alerts!</span></h6> {# Use context variable #}
+            </div>
+            <div class="col-12 col-xl-4">
+            <div class="justify-content-end d-flex">
+            <div class="dropdown flex-md-grow-1 flex-xl-grow-0">
+                <button class="btn btn-sm btn-light bg-white dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                <i class="mdi mdi-calendar"></i> Today ({% now "d M Y" %}) {# Use Django now tag #}
+                </button>
+            </div>
+            </div>
             </div>
         </div>
-
-        <!-- Active Routes Card -->
-        <div class="col-lg-3 col-md-6 col-sm-12">
-            <div class="card h-100" style="background-color: {{ JAZZMIN_SETTINGS.colors.success }}; border-left: 4px solid {{ JAZZMIN_SETTINGS.colors.teal }};">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h5 class="card-title mb-2">Active Routes</h5>
-                            <p class="card-text display-4 mb-0">{{ active_routes }}</p>
-                        </div>
-                        <i class="fas fa-route fa-3x opacity-50"></i>
-                    </div>
-                </div>
-                <div class="card-footer">
-                    <a href="{% url 'admin:core_route_changelist' %}" class="d-flex justify-content-between align-items-center">
-                        <span>View All Routes</span>
-                        <i class="fas fa-arrow-circle-right"></i>
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Total Students Card -->
-        <div class="col-lg-3 col-md-6 col-sm-12">
-            <div class="card h-100" style="background-color: {{ JAZZMIN_SETTINGS.colors.warning }}; border-left: 4px solid {{ JAZZMIN_SETTINGS.colors.orange }};">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h5 class="card-title mb-2">Total Students</h5>
-                            <p class="card-text display-4 mb-0">{{ total_students }}</p>
-                        </div>
-                        <i class="fas fa-users fa-3x opacity-50"></i>
-                    </div>
-                </div>
-                <div class="card-footer">
-                    <a href="{% url 'admin:core_student_changelist' %}" class="d-flex justify-content-between align-items-center">
-                        <span>View All Students</span>
-                        <i class="fas fa-arrow-circle-right"></i>
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Drivers Online Card -->
-        <div class="col-lg-3 col-md-6 col-sm-12">
-            <div class="card h-100" style="background-color: {{ JAZZMIN_SETTINGS.colors.danger }}; border-left: 4px solid {{ JAZZMIN_SETTINGS.colors.pink }};">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h5 class="card-title mb-2">Drivers Online</h5>
-                            <p class="card-text display-4 mb-0">{{ online_drivers }}</p>
-                        </div>
-                        <i class="fas fa-user-shield fa-3x opacity-50"></i>
-                    </div>
-                </div>
-                <div class="card-footer">
-                    <a href="{% url 'admin:core_customuser_changelist' %}?role__exact=driver" class="d-flex justify-content-between align-items-center">
-                        <span>View All Drivers</span>
-                        <i class="fas fa-arrow-circle-right"></i>
-                    </a>
-                </div>
-            </div>
         </div>
     </div>
-
-    <div class="row mt-4 g-4">
-        <!-- Live Bus Locations -->
-        <div class="col-lg-8 col-md-12">
-            <div class="card shadow-sm">
-                <div class="card-header d-flex justify-content-between align-items-center bg-white">
-                    <h5 class="card-title mb-0 text-primary">
-                        <i class="fas fa-map-marked-alt mr-2"></i> Live Bus Locations
-                    </h5>
-                    <div class="form-check form-switch mb-0">
-                        <input class="form-check-input" type="checkbox" id="liveTrackingToggle" checked>
-                        <label class="form-check-label" for="liveTrackingToggle">Live Updates</label>
-                    </div>
-                </div>
+    <div class="row">
+        {# Map Card - Full width for non-admins, half width for admins #}
+        <div class="{% if user.role != 'admin' %}col-md-12{% else %}col-md-6{% endif %} grid-margin stretch-card">
+            <div class="card tale-bg">
                 <div class="card-body">
-                    <div id="map"></div>
-                    <div class="mt-2 text-muted">
-                        <small>Last updated: <span id="lastUpdated" class="font-weight-bold">Just now</span></small>
-                    </div>
+                    <div id="mapid"></div>
                 </div>
             </div>
         </div>
 
-        <!-- Recent Concerns -->
-        <div class="col-lg-4 col-md-12">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-white">
-                    <h5 class="card-title mb-0 text-primary">
-                        <i class="fas fa-exclamation-circle mr-2"></i> Recent Concerns
-                    </h5>
-                </div>
-                <div class="card-body p-0">
-                    <div class="list-group list-group-flush">
-                        {% for concern in recent_concerns %}
-                            <a href="{% url 'admin:core_concern_change' concern.id %}" class="list-group-item list-group-item-action">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div class="mr-3">
-                                        <div class="font-weight-bold text-dark">{{ concern.subject|truncatechars:30 }}</div>
-                                        <small class="text-muted">Raised by: {{ concern.raised_by.get_full_name|default:concern.raised_by.username }}</small>
-                                    </div>
-                                    <span class="badge badge-status badge-{% if concern.status == 'open' %}danger{% elif concern.status == 'in_progress' %}warning{% else %}success{% endif %}">
-                                        {{ concern.get_status_display }}
-                                    </span>
-                                </div>
-                            </a>
-                        {% empty %}
-                            <div class="list-group-item">
-                                <div class="text-center text-muted py-3">No recent concerns</div>
-                            </div>
-                        {% endfor %}
+        {# Multi-colored Cards - Only visible for Admin #}
+        {% if user.role == 'admin' %}
+        <div class="col-md-6 grid-margin transparent">
+            <div class="row">
+                <div class="col-md-6 mb-4 stretch-card transparent">
+                    <div class="card card-tale">
+                        <div class="card-body">
+                            <p class="mb-4">Active Buses</p>
+                            {# Use dynamic data from views #}
+                            <p class="fs-30 mb-2">{{ active_buses_count|default:"0" }}</p>
+                            <p>{{ active_percentage|default:"N/A" }}% of fleet</p> {# Use dynamic data #}
+                        </div>
                     </div>
                 </div>
-                <div class="card-footer bg-white border-top">
-                    <a href="{% url 'admin:core_concern_changelist' %}" class="btn btn-sm btn-outline-primary d-flex justify-content-between align-items-center">
-                        <span>View All Concerns</span>
-                        <i class="fas fa-arrow-right"></i>
-                    </a>
+                <div class="col-md-6 mb-4 stretch-card transparent">
+                    <div class="card card-dark-blue">
+                        <div class="card-body">
+                            <p class="mb-4">Total Students</p>
+                            {# Use dynamic data from views #}
+                            <p class="fs-30 mb-2">{{ total_students|default:"0" }}</p>
+                            <p>{{ students_per_bus|default:"N/A" }} per bus (avg)</p> {# Use dynamic data #}
+                        </div>
+                    </div>
                 </div>
             </div>
+            <div class="row">
+                <div class="col-md-6 mb-4 mb-lg-0 stretch-card transparent">
+                    <div class="card card-light-blue">
+                        <div class="card-body">
+                            <p class="mb-4">Open Concerns</p>
+                            {# Use dynamic data from views #}
+                            <p class="fs-30 mb-2">{{ open_concerns_count|default:"0" }}</p>
+                            <p>{{ resolved_today|default:"N/A" }} resolved today</p> {# Use dynamic data #}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 stretch-card transparent">
+                    <div class="card card-light-danger">
+                        <div class="card-body">
+                            <p class="mb-4">Routes Covered</p>
+                            {# Use dynamic data from views #}
+                            <p class="fs-30 mb-2">{{ active_routes_count|default:"0" }}</p>
+                            <p>{{ routes_percentage|default:"N/A" }}% of area</p> {# Use dynamic data #}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %} {# End Admin card section #}
+    </div>
+    {# Additional sections based on user role #}
+    {% if user.is_authenticated %}
+    {% if user.role == 'admin' %}
+    <div class="row mt-4">
+        <div class="col-md-12 grid-margin stretch-card">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Recent Concerns</h6>
+            <a href="{% url 'core:user_concerns' %}" class="btn btn-primary btn-sm">View All</a> {# Use Django URL #}
+            </div>
+            <div class="card-body">
+            {% if recent_concerns %}
+            <div class="table-responsive">
+                <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                <thead>
+                    <tr>
+                    <th>Subject</th>
+                    <th>Raised By</th>
+                    <th>Bus</th>
+                    <th>Status</th>
+                    <th>Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for concern in recent_concerns %}
+                    <tr>
+                        <td>{{ concern.subject }}</td>
+                        <td>{{ concern.raised_by.username }}</td>
+                        <td>{{ concern.bus.bus_number|default:"N/A" }}</td>
+                        <td><span class="badge bg-secondary">{{ concern.status|capfirst }}</span></td>
+                        <td>{{ concern.timestamp|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="card-text">No recent concerns.</p>
+            {% endif %}
+            </div>
+        </div>
         </div>
     </div>
-</div>
-{% endblock %}
-
-{% block extrajs %}
-{{ block.super }}
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="{% static 'js/bus_tracking.js' %}"></script>
-<script src="https://api.mapbox.com/mapbox-gl-js/v2.10.0/mapbox-gl.js"></script>
-<script>
-    // Initialize Mapbox
-    mapboxgl.accessToken = "{{ MAPBOX_ACCESS_TOKEN }}";
-    var map = new mapboxgl.Map({
-        container: 'map', // Container ID
-        style: 'mapbox://styles/mapbox/streets-v11', // Map style
-        center: [55.2708, 25.2048], // UAE coordinates
-        zoom: 10 // Zoom level
-    });
-
-    // Add markers dynamically
-    fetch('/api/locations/current/')
-        .then(response => response.json())
-        .then(data => {
-            data.forEach(bus => {
-                new mapboxgl.Marker()
-                    .setLngLat([bus.longitude, bus.latitude])
-                    .setPopup(new mapboxgl.Popup().setHTML(`<b>Bus ${bus.bus_number}</b><br>Speed: ${bus.speed} km/h`))
-                    .addTo(map);
-            });
-        });
-</script>
+    {# You can add charts here for admin role #}
+    {% elif user.role == 'parent' %}
+    <div class="row mt-4">
+        <div class="col-md-12 grid-margin stretch-card">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-users me-2"></i> My Children</h6>
+            </div>
+            <div class="card-body">
+            {% if children %}
+            <ul class="list-group list-group-flush">
+                {% for child in children %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    {{ child.first_name }} {{ child.last_name }} (ID: <span class="text-muted">{{ child.student_id }}</span>)
+                    {% if child.assigned_route %}
+                    <span class="badge bg-info rounded-pill">{{ child.assigned_route.name }}</span>
+                    {% else %}
+                    <span class="badge bg-warning rounded-pill">Route Not Assigned</span>
+                    {% endif %}
+                </li>
+                {% empty %}
+                <li class="list-group-item">No children linked to your account.</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="card-text">No children linked to your account.</p>
+            {% endif %}
+            </div>
+        </div>
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col-md-6 grid-margin stretch-card">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-bell me-2"></i> Recent Notifications</h6>
+            </div>
+            <div class="card-body">
+            {% if recent_notifications %}
+            <ul class="list-group list-group-flush">
+                {% for notification in recent_notifications %}
+                <li class="list-group-item">
+                    <strong>{{ notification.subject }}</strong>
+                    <small class="text-muted float-end">{{ notification.timestamp|timesince }} ago</small>
+                </li>
+                {% empty %}
+                <li class="list-group-item">No recent notifications.</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="card-text">No recent notifications.</p>
+            {% endif %}
+            </div>
+        </div>
+        </div>
+        <div class="col-md-6 grid-margin stretch-card">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-question-circle me-2"></i> My Recent Concerns</h6>
+            </div>
+            <div class="card-body">
+            {% if recent_concerns %}
+            <ul class="list-group list-group-flush">
+                {% for concern in recent_concerns %}
+                <li class="list-group-item">
+                    <strong>{{ concern.subject }}</strong>
+                    <span class="badge bg-secondary float-end">{{ concern.status|capfirst }}</span>
+                </li>
+                {% empty %}
+                <li class="list-group-item">No recent concerns raised.</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="card-text">No recent concerns raised.</p>
+            {% endif %}
+            </div>
+        </div>
+        </div>
+    </div>
+    {% elif user.role == 'driver' %}
+    <div class="row mt-4">
+        <div class="col-md-12 grid-margin stretch-card">
+        <div class="card text-center shadow mb-4">
+            <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-bus-front me-2"></i> Assigned Bus</h6>
+            </div>
+            <div class="card-body">
+            {% if assigned_bus %}
+            <h5 class="card-title">{{ assigned_bus.bus_number }}</h5>
+            <p class="card-text text-muted">Capacity: {{ assigned_bus.capacity }}</p>
+            <p class="card-text text-muted">Status: <span class="badge bg-secondary">{{ assigned_bus.status|capfirst }}</span></p>
+            <button id="startTripBtn" class="btn btn-success mt-3" data-bus-id="{{ assigned_bus.id }}">
+                <i class="fas fa-play me-2"></i> Start Trip
+            </button>
+            <button id="stopTripBtn" class="btn btn-danger mt-3" data-bus-id="{{ assigned_bus.id }}">
+                <i class="fas fa-stop me-2"></i> Stop Trip
+            </button>
+            {% else %}
+            <h5 class="card-title">No Bus Assigned</h5>
+            <p class="card-text text-muted">Please contact administration.</p>
+            {% endif %}
+            </div>
+        </div>
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col-md-12 grid-margin stretch-card">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-bell me-2"></i> Recent Notifications for Drivers</h6>
+            </div>
+            <div class="card-body">
+            {% if recent_notifications %}
+            <ul class="list-group list-group-flush">
+                {% for notification in recent_notifications %}
+                <li class="list-group-item">
+                    <strong>{{ notification.subject }}</strong>
+                    <small class="text-muted float-end">{{ notification.timestamp|timesince }} ago</small>
+                </li>
+                {% empty %}
+                <li class="list-group-item">No recent notifications.</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="card-text">No recent notifications.</p>
+            {% endif %}
+            </div>
+        </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %} {# End of user role checks #}
 {% endblock %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Edit Bus - School Bus Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Edit Bus</h6>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="id_bus_number" class="form-label">Bus Number</label>
+                        <input type="text" class="form-control" id="id_bus_number" name="bus_number" value="{{ form.initial.bus_number }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_driver" class="form-label">Driver</label>
+                        <select class="form-select" id="id_driver" name="driver">
+                            <option value="">-- Select Driver --</option>
+                            {% for driver in drivers %}
+                            <option value="{{ driver.id }}" {% if form.initial.driver == driver.id %}selected{% endif %}>{{ driver.get_full_name }} ({{ driver.username }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_capacity" class="form-label">Capacity</label>
+                        <input type="number" class="form-control" id="id_capacity" name="capacity" value="{{ form.initial.capacity }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_status" class="form-label">Status</label>
+                        <select class="form-select" id="id_status" name="status" required>
+                            <option value="active" {% if form.initial.status == 'active' %}selected{% endif %}>Active</option>
+                            <option value="in_maintenance" {% if form.initial.status == 'in_maintenance' %}selected{% endif %}>In Maintenance</option>
+                            <option value="out_of_commission" {% if form.initial.status == 'out_of_commission' %}selected{% endif %}>Out of Commission</option>
+                            <option value="delayed" {% if form.initial.status == 'delayed' %}selected{% endif %}>Delayed</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_route" class="form-label">Assigned Route</label>
+                        <select class="form-select" id="id_route" name="route">
+                            <option value="">-- Select Route --</option>
+                            {% for route in routes %}
+                            <option value="{{ route.id }}" {% if object.assigned_route == route %}selected{% endif %}>{{ route.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Update Bus</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
