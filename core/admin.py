@@ -1,7 +1,7 @@
 # core/admin.py
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import Bus, BusLocation, Concern, CustomUser, Notification, Route, Student
+from .models import Bus, BusLocation, Concern, CustomUser, Notification, Route, School, Student
 from import_export.admin import ImportExportModelAdmin
 from import_export import resources
 
@@ -64,6 +64,11 @@ class BusResource(resources.ModelResource):
         model = Bus
         fields = ('id', 'bus_number', 'driver', 'capacity', 'status')
         import_id_fields = ['bus_number'] # Use bus_number as the identifier for updates/creation
+
+@admin.register(School)
+class SchoolAdmin(admin.ModelAdmin):
+    list_display = ('name', 'address', 'is_active')
+    search_fields = ('name', 'address')
 
 @admin.register(Bus)
 class BusAdmin(ImportExportModelAdmin, admin.ModelAdmin):

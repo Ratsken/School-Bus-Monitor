@@ -10,83 +10,111 @@
     <link rel="stylesheet" href="{% static 'vendors/ti-icons/css/themify-icons.css' %}">
     <link rel="stylesheet" href="{% static 'vendors/css/vendor.bundle.base.css' %}">
     <link rel="stylesheet" href="{% static 'vendors/datatables.net-bs4/dataTables.bootstrap4.css' %}">
-    <link rel="stylesheet" href="{% static 'vendors/ti-icons/css/themify-icons.css' %}">
     <link rel="stylesheet" type="text/css" href="{% static 'js/select.dataTables.min.css' %}">
     <link rel="stylesheet" href="{% static 'css/vertical-layout-light/style.css' %}">
-    <link rel="shortcut icon" href="{% static 'images/favicon.png' %}" />
+    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
 
     {# Add Font Awesome for icons #}
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" type="text/css">
-    {# Add Mapbox GL JS CSS #}
-    <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
+    {% comment %} {# Add Mapbox GL JS CSS #}
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet"> {% endcomment %}
 
     <!-- Leaflet CSS (Optional) -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css " />
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin=""
+    />
 
     <style>
-        /* Example definitions (should align with your Master File's style.css) */
-        :root {
-          --card-tale: #4747A1;
-          --card-dark-blue: #2D2D50;
-          --card-light-blue: #CED4DA; /* Using a gray from SB Admin 2 for contrast */
-          --card-light-danger: #FF4747;
-          --gray-800: #343a40; /* Define if not in your main style.css */
-          --gray-300: #dee2e6; /* Define if not in your main style.css */
-        }
-        .card.card-tale {
-            background: var(--card-tale);
-            color: white;
-        }
-
-        .card.card-dark-blue {
-            background: var(--card-dark-blue);
-            color: white;
-        }
-
-        .card.card-light-blue {
-            background: var(--card-light-blue);
-            color: var(--gray-800); /* Use dark text on light background */
-        }
-
-        .card.card-light-danger {
-            background: var(--card-light-danger);
-            color: white;
-        }
-
-        /* Ensure map container maintains aspect ratio and fits the card */
+        /* Map container */
         #mapid {
-            height: 600px; /* Increased height as requested */
+            height: 600px;
             width: 100%;
-            border: 1px solid var(--gray-300); /* Add border from bus_tracking.html snippet */
-            border-radius: 0.35rem; /* Match card border radius */
+            border-radius: 8px;
+            margin-bottom: 20px;
+            z-index: 1;
         }
-
-        /* Bus marker styling */
+        
+        /* Bus markers */
         .bus-marker {
-            width: 30px;
-            height: 30px;
+            width: 35px;
+            height: 35px;
             border-radius: 50%;
-            background-color: #4e73df; /* Default blue */
             display: flex;
             justify-content: center;
             align-items: center;
             color: white;
             font-size: 14px;
             cursor: pointer;
-            /* Add a subtle shadow for better visibility on the map */
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            transform: translate(-50%, -50%);
         }
-
+        
+        .bus-marker i {
+            font-size: 18px;
+        }
+        
+        .bus-number {
+            position: absolute;
+            bottom: -15px;
+            font-size: 10px;
+            font-weight: bold;
+            color: #333;
+            background: white;
+            padding: 0 3px;
+            border-radius: 3px;
+            white-space: nowrap;
+        }
+        
+        /* Status-specific colors */
         .bus-marker.active {
-            background-color: #1cc88a; /* Green for active buses */
+            background-color: #28a745; /* Green */
         }
-
-        .bus-marker.maintenance {
-            background-color: #f6c23e; /* Yellow for maintenance */
+        
+        .bus-marker.in_maintenance {
+            background-color: #ffc107; /* Yellow */
+            color: #212529;
         }
-
+        
+        .bus-marker.out_of_commission {
+            background-color: #dc3545; /* Red */
+        }
+        
+        .bus-marker.delayed {
+            background-color: #17a2b8; /* Teal */
+        }
+        
         .bus-marker.inactive {
-            background-color: #e74a3b; /* Red for inactive */
+            background-color: #6c757d; /* Gray */
+        }
+        
+        /* School markers */
+        .school-marker {
+            color: #6610f2; /* Purple */
+            font-size: 24px;
+            text-align: center;
+        }
+        
+        /* Map controls */
+        .leaflet-control-layers {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+        }
+        
+        /* Live tracking controls */
+        .live-tracking-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
         }
     </style>
 </head>
@@ -151,26 +179,27 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" data-toggle="collapse" href="#ui-management" aria-expanded="false" aria-controls="ui-management"> {# Changed ID #}
-                <i class="icon-layout menu-icon"></i>
-                <span class="menu-title">Management</span> {# Changed title #}
-                <i class="menu-arrow"></i>
+                <a class="nav-link" data-toggle="collapse" href="#ui-management" aria-expanded="false" aria-controls="ui-management">
+                    <i class="icon-layout menu-icon"></i>
+                    <span class="menu-title">Management</span>
+                    <i class="menu-arrow"></i>
                 </a>
-                <div class="collapse" id="ui-management"> {# Changed ID #}
-                <ul class="nav flex-column sub-menu">
-                    {% if user.role == 'admin' %} {# Conditional display #}
-                    <li class="nav-item"> <a class="nav-link" href="{% url 'core:manage_buses' %}">Manage Buses</a></li> {# Add URL #}
-                    <li class="nav-item"> <a class="nav-link" href="{% url 'core:manage_routes' %}">Manage Routes</a></li> {# Add URL #}
-                    <li class="nav-item"> <a class="nav-link" href="{% url 'core:manage_users' %}">Manage Users</a></li> {# Add URL #}
-                    <li class="nav-item"> <a class="nav-link" href="{% url 'core:manage_students' %}">Manage Students</a></li> {# Add URL #}
-                    {% endif %}
-                        {% if user.role != 'driver' %} {# Conditional display #}
-                        <li class="nav-item"> <a class="nav-link" href="{% url 'core:bus_tracking' %}">Bus Tracking</a></li> {# Use Django URL #}
+                <div class="collapse" id="ui-management">
+                    <ul class="nav flex-column sub-menu">
+                        {% if user.role == 'admin' %}
+                        <li class="nav-item"><a class="nav-link" href="{% url 'core:manage_schools' %}">Manage Schools</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{% url 'core:manage_buses' %}">Manage Buses</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{% url 'core:manage_routes' %}">Manage Routes</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{% url 'core:manage_users' %}">Manage Users</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{% url 'core:manage_students' %}">Manage Students</a></li>
                         {% endif %}
-                        {% if user.role == 'driver' %} {# Conditional display #}
-                        <li class="nav-item"> <a class="nav-link" href="#">My Trip</a></li> {# Placeholder #}
-                    {% endif %}
-                </ul>
+                        {% if user.role != 'driver' %}
+                        <li class="nav-item"><a class="nav-link" href="{% url 'core:bus_tracking' %}">Bus Tracking</a></li>
+                        {% endif %}
+                        {% if user.role == 'driver' %}
+                        <li class="nav-item"><a class="nav-link" href="#">My Trip</a></li>
+                        {% endif %}
+                    </ul>
                 </div>
             </li>
             <li class="nav-item">
@@ -197,12 +226,12 @@
             {% comment %} Display messages {% endcomment %}
             {% if messages %}
             <div class="container-fluid mt-3">
-              {% for message in messages %}
-              <div class="alert alert-dismissible fade show alert-{{ message.tags }}" role="alert">
+            {% for message in messages %}
+            <div class="alert alert-dismissible fade show alert-{{ message.tags }}" role="alert">
                 {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-              </div>
-              {% endfor %}
+                <button type="button" class="btn-close" data-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
             </div>
             {% endif %}
 
@@ -218,193 +247,26 @@
 </div>
 </div>
 </div>
-<script src="{% static 'vendors/js/vendor.bundle.base.js' %}"></script>
-<script src="{% static 'vendors/chart.js/Chart.min.js' %}"></script>
-<script src="{% static 'vendors/datatables.net/jquery.dataTables.js' %}"></script>
-<script src="{% static 'vendors/datatables.net-bs4/dataTables.bootstrap4.js' %}"></script>
-<script src="{% static 'js/dataTables.select.min.js' %}"></script>
+    <script src="{% static 'vendors/js/vendor.bundle.base.js' %}"></script>
+    <script src="{% static 'vendors/chart.js/Chart.min.js' %}"></script>
+    <script src="{% static 'vendors/datatables.net/jquery.dataTables.js' %}"></script>
+    <script src="{% static 'vendors/datatables.net-bs4/dataTables.bootstrap4.js' %}"></script>
+    <script src="{% static 'js/dataTables.select.min.js' %}"></script>
 
-<script src="{% static 'js/off-canvas.js' %}"></script>
-<script src="{% static 'js/hoverable-collapse.js' %}"></script>
-<script src="{% static 'js/template.js' %}"></script>
-<script src="{% static 'js/settings.js' %}"></script>
-<script src="{% static 'js/todolist.js' %}"></script>
-    <!-- Mapbox GL JS -->
-    <script src="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js "></script>
+    <script src="{% static 'js/off-canvas.js' %}"></script>
+    <script src="{% static 'js/hoverable-collapse.js' %}"></script>
+    <script src="{% static 'js/template.js' %}"></script>
+    <script src="{% static 'js/settings.js' %}"></script>
+    <script src="{% static 'js/todolist.js' %}"></script>
+    {% comment %} <!-- Mapbox GL JS -->
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js "></script> {% endcomment %}
 
     <!-- Leaflet JS (Optional) -->
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js "></script>
-
-    <!-- Inline Script for Map Initialization -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            // Initialize the map
-            const map = L.map('map').setView([25.2048, 55.2708], 10); // Default center (Oman), adjust as needed
-        
-            // Add OpenStreetMap tile layer
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 18,
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(map);
-        
-            // Add school locations as markers
-            const schoolLocations = {{ school_locations|safe }};
-            if (schoolLocations) {
-                schoolLocations.forEach((loc) => {
-                    L.marker([loc.lat, loc.lng])
-                        .addTo(map)
-                        .bindPopup(`<b>${loc.name}</b><br>School Location`);
-                });
-            }
-        
-            // Fetch and display live bus locations
-            const buses = {{ buses|safe }};
-            if (buses) {
-                buses.forEach((bus) => {
-                    if (bus.latitude && bus.longitude) {
-                        const coords = [bus.latitude, bus.longitude];
-        
-                        // Create a custom icon for the bus marker
-                        const busIcon = L.divIcon({
-                            className: `bus-marker ${bus.status}`,
-                            html: '<i class="fas fa-bus"></i>', // Font Awesome bus icon
-                            iconSize: [30, 30],
-                            iconAnchor: [15, 15]
-                        });
-        
-                        // Add bus marker to the map
-                        L.marker(coords, { icon: busIcon })
-                            .addTo(map)
-                            .bindPopup(`<b>Bus ${bus.bus_number}</b><br>Status: ${bus.status}`);
-                    } else {
-                        console.warn(`Location data missing for Bus ${bus.bus_number}`);
-                    }
-                });
-            }
-        
-            // Optional: Enable live updates if the toggle is checked
-            const liveTrackingToggle = document.getElementById('liveTrackingToggle');
-            let intervalId;
-        
-            function startLiveUpdates() {
-                intervalId = setInterval(() => {
-                    fetch('/api/live-bus-locations/')
-                        .then((response) => response.json())
-                        .then((data) => {
-                            // Clear existing bus markers
-                            map.eachLayer((layer) => {
-                                if (layer instanceof L.Marker && layer.options.icon?.options.className?.includes('bus-marker')) {
-                                    map.removeLayer(layer);
-                                }
-                            });
-        
-                            // Add updated bus markers
-                            data.forEach((bus) => {
-                                if (bus.latitude && bus.longitude) {
-                                    const coords = [bus.latitude, bus.longitude];
-        
-                                    const busIcon = L.divIcon({
-                                        className: `bus-marker ${bus.status}`,
-                                        html: '<i class="fas fa-bus"></i>',
-                                        iconSize: [30, 30],
-                                        iconAnchor: [15, 15]
-                                    });
-        
-                                    L.marker(coords, { icon: busIcon })
-                                        .addTo(map)
-                                        .bindPopup(`<b>Bus ${bus.bus_number}</b><br>Status: ${bus.status}`);
-                                }
-                            });
-        
-                            // Update the "Last updated" timestamp
-                            document.getElementById('lastUpdated').innerText = new Date().toLocaleTimeString();
-                        })
-                        .catch((error) => console.error('Error fetching live bus locations:', error));
-                }, 10000); // Update every 10 seconds
-            }
-        
-            function stopLiveUpdates() {
-                clearInterval(intervalId);
-            }
-        
-            // Start or stop live updates based on the toggle
-            liveTrackingToggle.addEventListener('change', () => {
-                if (liveTrackingToggle.checked) {
-                    startLiveUpdates();
-                } else {
-                    stopLiveUpdates();
-                }
-            });
-        
-            // Start live updates by default
-            startLiveUpdates();
-        
-            // Helper function to get CSRF token from cookies
-            function getCookie(name) {
-                let cookieValue = null;
-                if (document.cookie && document.cookie !== '') {
-                    const cookies = document.cookie.split(';');
-                    for (let i = 0; i < cookies.length; i++) {
-                        const cookie = cookies[i].trim();
-                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                            break;
-                        }
-                    }
-                }
-                return cookieValue;
-            }
-        
-            // Handle Start Trip Button (Driver Role)
-            document.querySelectorAll('.start-trip-btn').forEach((button) => {
-                button.addEventListener('click', () => {
-                    const busId = button.dataset.busId;
-        
-                    fetch(`/api/bus-trips/${busId}/start/`, {
-                        method: 'POST',
-                        headers: {
-                            'X-CSRFToken': getCookie('csrftoken'),
-                            'Content-Type': 'application/json',
-                        },
-                    })
-                        .then((response) => response.json())
-                        .then((data) => {
-                            console.log('Start trip response:', data);
-                            alert(data.status || 'Trip started successfully');
-                            button.disabled = true;
-                            const stopButton = document.querySelector(`button[data-bus-id="${busId}"].stop-trip-btn`);
-                            if (stopButton) stopButton.disabled = false;
-                        })
-                        .catch((error) => console.error('Error starting trip:', error));
-                });
-            });
-        
-            // Handle Stop Trip Button (Driver Role)
-            document.querySelectorAll('.stop-trip-btn').forEach((button) => {
-                button.addEventListener('click', () => {
-                    const busId = button.dataset.busId;
-        
-                    fetch(`/api/bus-trips/${busId}/stop/`, {
-                        method: 'POST',
-                        headers: {
-                            'X-CSRFToken': getCookie('csrftoken'),
-                            'Content-Type': 'application/json',
-                        },
-                    })
-                        .then((response) => response.json())
-                        .then((data) => {
-                            console.log('Stop trip response:', data);
-                            alert(data.status || 'Trip stopped successfully');
-                            button.disabled = true;
-                            const startButton = document.querySelector(`button[data-bus-id="${busId}"].start-trip-btn`);
-                            if (startButton) startButton.disabled = false;
-                        })
-                        .catch((error) => console.error('Error stopping trip:', error));
-                });
-            });
-        });
-    </script>
-
+    <script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""
+    ></script>
     {% block extra_js %}
     {% endblock %}
 </body>

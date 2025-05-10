@@ -63,6 +63,14 @@ urlpatterns = [
     path('concerns/raise/', views.RaiseConcernView.as_view(), name='raise_concern'),
     path('concerns/', views.UserConcernsView.as_view(), name='user_concerns'),
 
+    path('schools/', views.SchoolListView.as_view(), name='manage_schools'),
+    path('schools/add/', views.SchoolCreateView.as_view(), name='add_school'),
+    path('schools/<int:pk>/edit/', views.SchoolUpdateView.as_view(), name='edit_school'),
+    path('schools/<int:pk>/delete/', views.SchoolDeleteView.as_view(), name='delete_school'),
+
+    path('start_trip/<int:bus_id>/', views.start_trip, name='start_trip'),
+    path('stop_trip/<int:bus_id>/', views.stop_trip, name='stop_trip'),
+
     # API URLs (using DRF Router)
     path('api/', include(router.urls)),
 ]

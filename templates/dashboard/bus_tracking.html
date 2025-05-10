@@ -1,98 +1,243 @@
-{% extends 'base.html' %}
+<!-- dashboard/bus_tracking.html -->
+{% extends "base.html" %}
 {% load static %}
-
-{% block title %}Bus Tracking - School Bus Management{% endblock %}
-
-{% block extra_css %}
-<link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css " rel="stylesheet">
-<style>
-    #mapid {
-        height: 500px; /* Set a fixed height for the map */
-    }
-</style>
-{% endblock %}
+{% load static bus_filters %}
 
 {% block content %}
-<div class="d-sm-flex align-items-center justify-content-between mb-4">
-    <h1 class="h3 mb-0 text-gray-800">Live Bus Tracking</h1>
-</div>
-
-<!-- Map Section -->
 <div class="row">
-    <div class="col-md-12">
-        <div class="card shadow mb-4">
-            <div class="card-header py-3">
-                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-map-marker-alt me-2"></i> Bus Map</h6>
-            </div>
+    <div class="col-md-12 grid-margin">
+        <div class="card">
             <div class="card-body">
-                <div id="mapid"></div>
-                <div class="mt-2 text-muted">
-                    <small>Last updated: <span id="lastUpdated" class="font-weight-bold">Just now</span></small>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Buses List -->
-<div class="row">
-    <div class="col-md-12">
-        <div class="card shadow mb-4">
-            <div class="card-header py-3">
-                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-bus me-2"></i> Active Buses</h6>
-            </div>
-            <div class="card-body">
-                {% if buses %}
-                <div class="table-responsive">
-                    <table class="table table-bordered" id="busTable" width="100%" cellspacing="0">
-                        <thead>
-                            <tr>
-                                <th>Bus Number</th>
-                                <th>Route</th>
-                                <th>Status</th>
-                                <th>Last Reported Location</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                <h4 class="card-title">Live Bus Tracking</h4>
+                <div class="row">
+                    <div class="col-md-8">
+                        <div id="mapid" style="height: 600px;"></div>
+                        <div class="mt-2 text-muted">
+                            Last updated: <span id="lastUpdated">{{ now|date:"H:i:s" }}</span>
+                            <div class="form-check form-switch float-end">
+                                <input class="form-check-input" type="checkbox" id="liveTrackingToggle" checked>
+                                <label class="form-check-label" for="liveTrackingToggle">Live Updates</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="list-group">
                             {% for bus in buses %}
-                            <tr>
-                                <td><strong>{{ bus.bus_number }}</strong></td>
-                                <td>{{ bus.route.name|default:"N/A" }}</td>
-                                <td>
-                                    <span class="badge bg-{% if bus.status == 'active' %}success{% elif bus.status == 'delayed' %}warning{% else %}secondary{% endif %}">
-                                        {{ bus.status|capfirst }}
-                                    </span>
-                                </td>
-                                <td id="last-location-{{ bus.id }}">Loading location...</td>
-                                <td>
-                                    {% if user.role == 'admin' or user.role == 'driver' %}
-                                    <button 
-                                        class="btn btn-success btn-sm start-trip-btn" 
-                                        data-bus-id="{{ bus.id }}"
-                                        {% if bus.status != 'inactive' %}disabled{% endif %}
-                                    >
-                                        <i class="fas fa-play me-2"></i> Start Trip
-                                    </button>
-                                    <button 
-                                        class="btn btn-danger btn-sm stop-trip-btn" 
-                                        data-bus-id="{{ bus.id }}"
-                                        {% if bus.status != 'active' %}disabled{% endif %}
-                                    >
-                                        <i class="fas fa-stop me-2"></i> Stop Trip
-                                    </button>
-                                    {% endif %}
-                                </td>
-                            </tr>
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">Bus {{ bus.bus_number }}</h6>
+                                    <small class="text-muted">
+                                        Route: {{ bus.route_name }}<br>
+                                        Status: <span class="badge bg-{{ bus.status|bus_status_color }}">{{ bus.status }}</span>
+                                    </small>
+                                </div>
+                                {% if bus.latitude and bus.longitude %}
+                                <button class="btn btn-sm btn-primary center-map-btn" 
+                                        data-lat="${bus.latitude}" 
+                                        data-lng="${bus.longitude}">
+                                        <i class="fas fa-map-marker-alt"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                            {% empty %}
+                            <div class="list-group-item">
+                                No active buses available
+                            </div>
                             {% endfor %}
-                        </tbody>
-                    </table>
+                        </div>
+                    </div>
                 </div>
-                {% else %}
-                <p class="card-text">No active buses to display.</p>
-                {% endif %}
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize the map only if the element exists
+        if (document.getElementById('mapid')) {
+            const map = L.map('mapid').setView([23.5880, 58.3829], 12); // Centered on Muscat
+            let busMarkers = L.layerGroup().addTo(map);
+            let routeLines = L.layerGroup().addTo(map);
+    
+            // Add tile layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 18,
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+    
+            // Fix map display issues
+            setTimeout(() => map.invalidateSize(), 100);
+    
+            // Custom bus icons
+            function getBusIcon(status, busNumber) {
+                return L.divIcon({
+                    className: `bus-marker ${status}`,
+                    html: `<i class="fas fa-bus"></i><span class="bus-number">${busNumber}</span>`,
+                    iconSize: [35, 35],
+                    iconAnchor: [17, 17]
+                });
+            }
+    
+            // Add school markers from context data
+            {% if school_locations %}
+            const schoolLocations = {{ school_locations|safe }};
+            schoolLocations.forEach(school => {
+                L.marker([school.lat, school.lng], {
+                    icon: L.divIcon({
+                        className: 'school-marker',
+                        html: '<i class="fas fa-school"></i>',
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
+                    })
+                }).bindPopup(`<b>${school.name}</b><br>${school.address || ''}`)
+                .addTo(map);
+            });
+            {% endif %}
+    
+            // Update bus markers function
+            function updateBusMarkers(buses) {
+                busMarkers.clearLayers();
+                routeLines.clearLayers();
+            
+                buses.forEach(bus => {
+                    if (bus.latitude !== null && bus.longitude !== null) {
+                        const marker = L.marker([bus.latitude, bus.longitude], {
+                            icon: getBusIcon(bus.status, bus.bus_number)
+                        }).bindPopup(`
+                            <b>Bus ${bus.bus_number}</b><br>
+                            Status: ${bus.status}<br>
+                            Route: ${bus.route_name || 'Unassigned'}<br>
+                            Speed: ${bus.speed ? `${bus.speed} km/h` : 'N/A'}<br>
+                            Last update: ${bus.timestamp ? new Date(bus.timestamp + 'Z').toLocaleString() : 'N/A'}
+                            <div class="mt-2">
+                                <button class="btn btn-sm btn-primary center-map-btn" 
+                                    data-lat="${bus.latitude}" 
+                                    data-lng="${bus.longitude}">
+                                    <i class="fas fa-crosshairs"></i> Center
+                                </button>
+                            </div>
+                        `);
+                        
+                        busMarkers.addLayer(marker);
+
+                        // Add click event after marker is added to map
+                        marker.on('popupopen', function() {
+                            document.querySelector('.center-map-btn').addEventListener('click', function() {
+                                const lat = parseFloat(this.dataset.lat);
+                                const lng = parseFloat(this.dataset.lng);
+                                centerMapOnBus(lat, lng);
+                            });
+                        });
+            
+                        // Plot route stops if available
+                        if (bus.route_stops && bus.route_stops.length > 0) {
+                            const routePoints = bus.route_stops.map(stop => [stop.lat, stop.lng]);
+                            const routeLine = L.polyline(routePoints, {
+                                color: '#007bff',
+                                weight: 3,
+                                opacity: 0.7,
+                                dashArray: '5, 5'
+                            }).bindPopup(`Route: ${bus.route_name || 'Unassigned'}`);
+            
+                            routeLines.addLayer(routeLine);
+                        }
+                    }
+                });
+            
+                document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
+            }
+    
+            // Define the centerMapOnBus function
+            const centerMapOnBus = (lat, lng) => {
+                map.setView([lat, lng], 15);
+            };
+    
+            // Expose function to global scope
+            window.centerMapOnBus = centerMapOnBus;
+    
+            // Initial data load
+            {% if buses %}
+            updateBusMarkers({{ buses|safe }});
+            {% endif %}
+    
+            // Live updates control
+            let updateInterval;
+    
+            function startLiveUpdates() {
+                fetchBusData();
+                updateInterval = setInterval(fetchBusData, 10000);
+            }
+    
+            function stopLiveUpdates() {
+                clearInterval(updateInterval);
+            }
+    
+            // Get CSRF token for authenticated requests
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+    
+            // Enhanced fetchBusData with authentication
+            function fetchBusData() {
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                };
+                
+                // Add CSRF token if available
+                const csrfToken = getCookie('csrftoken');
+                if (csrfToken) {
+                    headers['X-CSRFToken'] = csrfToken;
+                }
+                
+                fetch('/api/live-bus-locations/', {
+                    method: 'GET',
+                    headers: headers,
+                    credentials: 'include' // Include cookies for session authentication
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log("Fetched bus data:", data);
+                    updateBusMarkers(data);
+                })
+                .catch(error => {
+                    console.error('Error fetching bus data:', error);
+                    // Optionally show error to user
+                    document.getElementById('lastUpdated').textContent = 'Error updating locations';
+                });
+            }
+        
+            // Toggle live updates
+            const liveToggle = document.getElementById('liveTrackingToggle');
+            if (liveToggle) {
+                liveToggle.addEventListener('change', function(e) {
+                    if (e.target.checked) {
+                        startLiveUpdates();
+                    } else {
+                        stopLiveUpdates();
+                    }
+                });
+                startLiveUpdates(); // Start by default
+            }
+        }
+    });    
+</script>
 {% endblock %}

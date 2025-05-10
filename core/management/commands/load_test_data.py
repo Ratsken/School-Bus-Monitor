@@ -1,6 +1,6 @@
 # bus_management/core/management/commands/load_test_data.py
 from django.core.management.base import BaseCommand
-from core.models import Bus, Route, CustomUser, Student, Concern, Notification, BusLocation
+from core.models import Bus, Route, CustomUser, Student, Concern, Notification, BusLocation, School
 from django.utils import timezone
 import random
 from datetime import timedelta
@@ -10,24 +10,41 @@ class Command(BaseCommand):
     help = 'Load comprehensive test data for the system'
 
     def handle(self, *args, **kwargs):
-        # UAE school locations (latitude, longitude)
+        # Oman school locations (latitude, longitude)
         SCHOOL_LOCATIONS = {
-            'main_campus': (25.2048, 55.2708),  # Downtown Dubai
-            'branch_1': (25.0764, 55.1324),      # Al Barsha
-            'branch_2': (25.2676, 55.2927)       # Dubai International Academic City
+            'main_campus': (23.5880, 58.3829),  # Muscat
+            'branch_1': (23.6139, 58.5423),     # Seeb
+            'branch_2': (23.5657, 58.3259)      # Al Amerat
         }
 
-        # Residential areas in Dubai with coordinates
+        # Residential areas in Oman with coordinates
         RESIDENTIAL_AREAS = [
-            {'name': 'Arabian Ranches', 'coords': (25.0605, 55.1830)},
-            {'name': 'The Springs', 'coords': (25.0657, 55.1718)},
-            {'name': 'Jumeirah', 'coords': (25.2249, 55.2517)},
-            {'name': 'Mirdif', 'coords': (25.2205, 55.4025)},
-            {'name': 'Al Nahda', 'coords': (25.2866, 55.3593)},
-            {'name': 'Al Warqa', 'coords': (25.2484, 55.4128)},
-            {'name': 'Discovery Gardens', 'coords': (25.0647, 55.1522)},
-            {'name': 'Motor City', 'coords': (25.0438, 55.2176)}
+            {'name': 'Al Khuwair', 'coords': (23.5792, 58.4076)},
+            {'name': 'Qurum', 'coords': (23.5937, 58.4458)},
+            {'name': 'Al Ghubrah', 'coords': (23.5657, 58.3829)},
+            {'name': 'Bawshar', 'coords': (23.5500, 58.3806)},
+            {'name': 'Ruwi', 'coords': (23.5937, 58.5423)},
+            {'name': 'Mabelah', 'coords': (23.5333, 58.3667)},
+            {'name': 'Al Hail', 'coords': (23.6000, 58.4833)},
+            {'name': 'Saruj', 'coords': (23.5500, 58.4167)}
         ]
+
+        # Create schools
+        schools = []
+        for name, coords in SCHOOL_LOCATIONS.items():
+            school, created = School.objects.get_or_create(
+                name=f"Modern School of Oman - {name.replace('_', ' ').title()}",
+                defaults={
+                    'address': f"Address for {name.replace('_', ' ')}",
+                    'latitude': coords[0],
+                    'longitude': coords[1],
+                    'phone': '+96824123456',
+                    'email': f'{name}@modernschool.om',
+                    'principal': 'Principal Name',
+                    'is_active': True
+                }
+            )
+            schools.append(school)
 
         # Create admin user
         admin, created = CustomUser.objects.get_or_create(
@@ -35,7 +52,8 @@ class Command(BaseCommand):
             defaults={
                 'email': 'admin@school.com',
                 'role': 'admin',
-                'phone_number': '+971501234567'
+                'phone_number': '+96891234567',
+                'school': schools[0]  # Assign to the first school
             }
         )
         if created:
@@ -48,11 +66,12 @@ class Command(BaseCommand):
         school_admin, created = CustomUser.objects.get_or_create(
             username='school_admin',
             defaults={
-                'email': 'admin@modernschool.ae',
+                'email': 'admin@modernschool.om',
                 'role': 'admin',
-                'phone_number': '+971501234568',
+                'phone_number': '+96891234568',
                 'first_name': 'Fatima',
-                'last_name': 'Al Maktoum'
+                'last_name': 'Al Said',
+                'school': schools[0]  # Assign to the first school
             }
         )
         if created:
@@ -78,9 +97,10 @@ class Command(BaseCommand):
                 defaults={
                     'email': f'driver{i}@school.com',
                     'role': 'driver',
-                    'phone_number': f'+97150{1234560+i}',
+                    'phone_number': f'+96891{1234560+i}',
                     'first_name': first,
-                    'last_name': last
+                    'last_name': last,
+                    'school': schools[i % len(schools)]  # Assign to a school
                 }
             )
             if created:
@@ -96,9 +116,10 @@ class Command(BaseCommand):
                 defaults={
                     'email': f'parent{i}@school.com',
                     'role': 'parent',
-                    'phone_number': f'+97155{1234560+i}',
+                    'phone_number': f'+96895{1234560+i}',
                     'first_name': f'Parent{i}_First',
-                    'last_name': f'Parent{i}_Last'
+                    'last_name': f'Parent{i}_Last',
+                    'school': schools[i % len(schools)]  # Assign to a school
                 }
             )
             if created:
@@ -106,11 +127,11 @@ class Command(BaseCommand):
                 parent.save()
             parents.append(parent)
 
-        # Create buses with realistic UAE bus numbers
+        # Create buses with realistic Oman bus numbers
         buses = []
         bus_numbers = [
-            'DXB-1001', 'DXB-1002', 'DXB-1003', 'DXB-1004',
-            'DXB-2001', 'DXB-2002', 'DXB-2003', 'DXB-2004'
+            'MCT-1001', 'MCT-1002', 'MCT-1003', 'MCT-1004',
+            'MCT-2001', 'MCT-2002', 'MCT-2003', 'MCT-2004'
         ]
 
         for i, bus_num in enumerate(bus_numbers):
@@ -119,20 +140,21 @@ class Command(BaseCommand):
                 defaults={
                     'capacity': random.choice([45, 50, 55]),
                     'driver': drivers[i] if i < len(drivers) else None,
-                    'status': random.choice(['active', 'active', 'active', 'in_maintenance', 'delayed'])
+                    'status': random.choice(['active', 'active', 'active', 'in_maintenance', 'delayed']),
+                    'school': schools[i % len(schools)]  # Assign to a school
                 }
             )
             buses.append(bus)
 
-        # Create routes with realistic UAE school routes
+        # Create routes with realistic Oman school routes
         routes = []
         route_names = [
-            'Morning Route - Arabian Ranches to Main Campus',
-            'Morning Route - Jumeirah to Main Campus',
-            'Morning Route - Mirdif to Branch 1',
-            'Afternoon Route - Main Campus to Al Warqa',
-            'Afternoon Route - Branch 1 to Discovery Gardens',
-            'Evening Route - Branch 2 to Motor City',
+            'Morning Route - Al Khuwair to Main Campus',
+            'Morning Route - Qurum to Main Campus',
+            'Morning Route - Mabelah to Branch 1',
+            'Afternoon Route - Main Campus to Al Hail',
+            'Afternoon Route - Branch 1 to Saruj',
+            'Evening Route - Branch 2 to Ruwi',
             'Weekend Route - All Areas Shuttle'
         ]
 
@@ -142,7 +164,8 @@ class Command(BaseCommand):
                 defaults={
                     'bus': buses[i] if i < len(buses) else None,
                     'start_time': timezone.now().replace(hour=6, minute=30 if i < 3 else 14, second=0),
-                    'end_time': timezone.now().replace(hour=7, minute=45 if i < 3 else 15, second=30)
+                    'end_time': timezone.now().replace(hour=7, minute=45 if i < 3 else 15, second=30),
+                    'school': schools[i % len(schools)]  # Assign to a school
                 }
             )
             routes.append(route)
@@ -171,6 +194,7 @@ class Command(BaseCommand):
                     'last_name': last,
                     'parent': parent,
                     'assigned_route': assigned_route,
+                    'school': schools[i % len(schools)]  # Assign to a school
                 }
             )
             students.append(student)
@@ -188,6 +212,7 @@ class Command(BaseCommand):
                     'last_name': f'Student{i}_Last',
                     'parent': parent,
                     'assigned_route': assigned_route,
+                    'school': schools[i % len(schools)]  # Assign to a school
                 }
             )
             students.append(student)
@@ -199,8 +224,6 @@ class Command(BaseCommand):
 
             # Generate a route of points from a random residential area to the school in the bus's assigned route
             route_points = []
-            # Assuming a route object has a way to determine its start/end points or areas
-            # For this sample, we'll just use a random residential area and the first school location
             residential_area = random.choice(RESIDENTIAL_AREAS)
             school = list(SCHOOL_LOCATIONS.values())[0] # Use the first school location as a destination example
 
@@ -218,7 +241,9 @@ class Command(BaseCommand):
                     latitude=lat,
                     longitude=lng,
                     timestamp=timestamp,
-                    speed=random.randint(30, 60)  # km/h
+                    speed=random.randint(30, 60),  # km/h
+                    is_trip_start=(j == 0),     # Mark the first point as trip start
+                    is_trip_end=(j == len(route_points) - 1)  # Mark the last point as trip end
                 )
 
         # Create concerns
@@ -249,7 +274,7 @@ class Command(BaseCommand):
         notification_types = [
             ('Bus Delay', 'delay', 'The bus will be 15 minutes late due to traffic.'),
             ('Route Change', 'info', 'The afternoon route has been modified.'),
-            ('Maintenance', 'maintenance', 'Bus DXB-1003 is undergoing maintenance.'),
+            ('Maintenance', 'maintenance', 'Bus MCT-1003 is undergoing maintenance.'),
             ('Weather Alert', 'alert', 'School buses may be delayed due to fog.')
         ]
 
@@ -280,7 +305,6 @@ class Command(BaseCommand):
                     recipients_list = [admin, school_admin] # Notify both admins
                 notification.recipients.set(recipients_list)
 
-
         self.stdout.write(self.style.SUCCESS(
             f'Successfully loaded test data:\n'
             f'- {CustomUser.objects.count()} users\n'
@@ -291,3 +315,4 @@ class Command(BaseCommand):
             f'- {Concern.objects.count()} concerns\n'
             f'- {Notification.objects.count()} notifications\n'
         ))
+        self.stdout.write(self.style.SUCCESS('Test data loaded successfully!'))

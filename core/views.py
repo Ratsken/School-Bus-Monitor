@@ -1,12 +1,17 @@
+from datetime import timedelta
+from django.http import HttpResponse
+from django.utils import timezone
 from django.urls import reverse_lazy
 from django.views.generic import TemplateView, CreateView
 from django.contrib.auth.views import LoginView, LogoutView, PasswordResetView, PasswordResetDoneView, PasswordResetConfirmView, PasswordResetCompleteView
 from django.contrib.auth.forms import AuthenticationForm
+from django.db.models import Subquery, OuterRef, Q, Avg
 from django.contrib.auth import get_user_model
 from django.conf import settings
 
 CustomUser = get_user_model()
 
+from core.serializers import BusSerializer, RouteSerializer
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -14,9 +19,66 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 
 # Assuming your models are in core.models
-from core.models import Bus, BusLocation, Route, CustomUser, Student, Concern, Notification
+from core.models import Bus, BusLocation, Route, CustomUser, School, Student, Concern, Notification
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView
+
+def start_trip(request, bus_id):
+    bus = Bus.objects.get(id=bus_id)
+    BusLocation.objects.create(bus=bus, latitude=bus.last_known_latitude, longitude=bus.last_known_longitude, is_trip_start=True)
+    return HttpResponse("Trip started")
+
+def stop_trip(request, bus_id):
+    bus = Bus.objects.get(id=bus_id)
+    BusLocation.objects.create(bus=bus, latitude=bus.last_known_latitude, longitude=bus.last_known_longitude, is_trip_start=False)
+    return HttpResponse("Trip stopped")
+
+class SchoolListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = School
+    template_name = 'management/school_list.html'
+    context_object_name = 'schools'
+    
+    def test_func(self):
+        return self.request.user.role == 'admin'
+
+class SchoolCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
+    model = School
+    fields = ['name', 'address', 'latitude', 'longitude', 'phone', 'email', 'principal', 'is_active']
+    template_name = 'management/school_form.html'
+    success_url = reverse_lazy('core:manage_schools')
+    
+    def test_func(self):
+        return self.request.user.role == 'admin'
+    
+    def form_valid(self, form):
+        form.instance.created_by = self.request.user
+        return super().form_valid(form)
+
+class SchoolUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+    model = School
+    fields = ['name', 'address', 'latitude', 'longitude', 'phone', 'email', 'principal', 'is_active']
+    template_name = 'management/school_form.html'
+    success_url = reverse_lazy('core:manage_schools')
+    
+    def test_func(self):
+        return self.request.user.role == 'admin'
+
+class SchoolDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+    model = School
+    template_name = 'management/school_confirm_delete.html'
+    success_url = reverse_lazy('core:manage_schools')
+    
+    def test_func(self):
+        return self.request.user.role == 'admin'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['dependent_objects'] = {
+            'Users': self.object.users.count(),
+            'Buses': self.object.buses.count(),
+            'Students': self.object.students.count()
+        }
+        return context
 
 # Manage Users
 class ManageUsersView(LoginRequiredMixin, UserPassesTestMixin, ListView):
@@ -177,51 +239,48 @@ class DeleteRouteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     def test_func(self):
         return self.request.user.role == 'admin'
 
-
 class BusViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API endpoints for viewing Buses.
-    Admin users can view all buses. Drivers can view their assigned bus.
-    Parents can view buses assigned to their children's routes.
-    """
     queryset = Bus.objects.all()
     permission_classes = [IsAuthenticated]
-    # serializer_class = BusSerializer # Uncomment and define if you create BusSerializer
+    serializer_class = BusSerializer  # Ensure it's included
 
     def get_queryset(self):
-        """
-        Optionally restricts the returned buses based on user role.
-        """
         user = self.request.user
         if user.role == 'admin':
             return Bus.objects.all()
         elif user.role == 'driver':
             return Bus.objects.filter(driver=user)
         elif user.role == 'parent':
-            # Return buses assigned to the parent's children's routes
             child_routes = Route.objects.filter(students__parent=user).distinct()
             bus_ids = child_routes.values_list('bus__id', flat=True)
             return Bus.objects.filter(id__in=bus_ids).distinct()
-        return Bus.objects.none() # No access for other roles
-
+        return Bus.objects.none()
 
 class BusTripViewSet(viewsets.ViewSet):
-    """
-    API endpoints for drivers to manage bus trips (start/stop) and post location updates.
-    Requires the user to be a driver and assigned to the bus.
-    """
-    permission_classes = [IsAuthenticated]
-
+    """Enhanced bus trip management with location history"""
+    
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):
         bus = get_object_or_404(Bus, pk=pk)
         if request.user.role != 'driver' or bus.driver != request.user:
             return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
 
-        # Logic to start the bus trip
         bus.status = 'active'
         bus.save()
-        return Response({'status': f'Trip started for Bus {bus.bus_number}'})
+        
+        # Create a trip start log
+        BusLocation.objects.create(
+            bus=bus,
+            latitude=bus.last_known_latitude,
+            longitude=bus.last_known_longitude,
+            speed=0,
+            is_trip_start=True
+        )
+        
+        return Response({
+            'status': f'Trip started for Bus {bus.bus_number}',
+            'bus_status': bus.status
+        })
 
     @action(detail=True, methods=['post'])
     def stop(self, request, pk=None):
@@ -229,79 +288,122 @@ class BusTripViewSet(viewsets.ViewSet):
         if request.user.role != 'driver' or bus.driver != request.user:
             return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
 
-        # Logic to stop the bus trip
         bus.status = 'inactive'
         bus.save()
-        return Response({'status': f'Trip stopped for Bus {bus.bus_number}'})
+        
+        # Create a trip end log
+        BusLocation.objects.create(
+            bus=bus,
+            latitude=bus.last_known_latitude,
+            longitude=bus.last_known_longitude,
+            speed=0,
+            is_trip_end=True
+        )
+        
+        return Response({
+            'status': f'Trip stopped for Bus {bus.bus_number}',
+            'bus_status': bus.status
+        })
 
     @action(detail=True, methods=['post'])
     def post_location(self, request, pk=None):
-        """
-        Posts the current location for the specified bus.
-        Requires the user to be the assigned driver.
-        """
         bus = get_object_or_404(Bus, pk=pk)
-        # Add role check and driver assignment check
         if request.user.role != 'driver' or bus.driver != request.user:
             return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
 
         latitude = request.data.get('latitude')
         longitude = request.data.get('longitude')
-        speed = request.data.get('speed') # Optional
+        speed = request.data.get('speed', 0)
 
-        if latitude is not None and longitude is not None:
-            BusLocation.objects.create(
-                bus=bus,
-                latitude=latitude,
-                longitude=longitude,
-                speed=speed
+        if None in (latitude, longitude):
+            return Response(
+                {'detail': 'Latitude and longitude are required.'}, 
+                status=status.HTTP_400_BAD_REQUEST
             )
-            return Response({'status': 'location updated'}, status=status.HTTP_201_CREATED)
-        else:
-            return Response({'detail': 'Latitude and longitude are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Update bus's last known location
+        bus.last_known_latitude = latitude
+        bus.last_known_longitude = longitude
+        bus.last_known_location_time = timezone.now()
+        bus.save()
 
-class LiveBusLocationViewSet(viewsets.ViewSet):
-    """API endpoint to get the latest locations of active buses relevant to the user."""
-    permission_classes = [IsAuthenticated]
+        # Create location record
+        location = BusLocation.objects.create(
+            bus=bus,
+            latitude=latitude,
+            longitude=longitude,
+            speed=speed
+        )
 
+        return Response({
+            'status': 'Location updated',
+            'timestamp': location.timestamp,
+            'bus_status': bus.status
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['get'])
+    def location_history(self, request, pk=None):
+        bus = get_object_or_404(Bus, pk=pk)
+        if request.user.role not in ['admin', 'driver'] or (
+            request.user.role == 'driver' and bus.driver != request.user
+        ):
+            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Get locations from the last 24 hours by default
+        hours = int(request.query_params.get('hours', 24))
+        since = timezone.now() - timedelta(hours=hours)
+        
+        locations = BusLocation.objects.filter(
+            bus=bus,
+            timestamp__gte=since
+        ).order_by('-timestamp')
+
+        return Response([{
+            'latitude': loc.latitude,
+            'longitude': loc.longitude,
+            'timestamp': loc.timestamp,
+            'speed': loc.speed,
+            'is_trip_start': loc.is_trip_start,
+            'is_trip_end': loc.is_trip_end
+        } for loc in locations])
+
+# views.py (updated LiveBusLocationViewSet)
+class LiveBusLocationViewSet(viewsets.ReadOnlyModelViewSet):
+    """API endpoint for live bus locations"""
+
+    queryset = Bus.objects.all()
+    serializer_class = BusSerializer  # Ensure data is properly serialized
+    
     def list(self, request):
-        """Returns the latest location for active buses relevant to the user's role."""
         user = request.user
+        active_buses = Bus.objects.none()
 
-        # Filter active buses based on user role
+        # Restrict buses based on user role
         if user.role == 'admin':
-            active_buses = Bus.objects.filter(status='active')
+            active_buses = Bus.objects.all()
         elif user.role == 'parent':
-            child_routes = Route.objects.filter(students__parent=user).distinct()
-            bus_ids = child_routes.values_list('bus__id', flat=True)
-            active_buses = Bus.objects.filter(id__in=bus_ids, status='active')
+            active_buses = Bus.objects.filter(route__students__parent=user).distinct()
         elif user.role == 'driver':
-            try:
-                active_buses = Bus.objects.filter(driver=user, status='active')
-            except Bus.DoesNotExist:
-                active_buses = Bus.objects.none()
-        else:
-            active_buses = Bus.objects.none()  # No access for other roles
+            active_buses = Bus.objects.filter(driver=user)
 
-        locations = []
-        for bus in active_buses:
-            latest_location = BusLocation.objects.filter(bus=bus).order_by('-timestamp').first()
-            if latest_location:
-                # Query the Route model to find the route associated with this bus
-                route = Route.objects.filter(bus=bus).first()
-                route_name = route.name if route else 'Unassigned'
-                locations.append({
-                    'bus_id': bus.id,
-                    'bus_number': bus.bus_number,
-                    'latitude': latest_location.latitude,
-                    'longitude': latest_location.longitude,
-                    'timestamp': latest_location.timestamp.isoformat(),
-                    'speed': latest_location.speed,
-                    'route_name': route_name
-                })
+        # Get latest location per bus
+        latest_locations = BusLocation.objects.filter(bus=OuterRef('pk')).order_by('-timestamp')
 
-        return Response(locations)
+        # Update Bus model with latest known latitude, longitude, timestamp, speed, and heading
+        Bus.objects.update(
+            last_known_latitude=Subquery(latest_locations.values('latitude')[:1]),
+            last_known_longitude=Subquery(latest_locations.values('longitude')[:1]),
+            last_known_location_time=Subquery(latest_locations.values('timestamp')[:1]),
+            last_known_speed=Subquery(latest_locations.values('speed')[:1]),
+            last_known_heading=Subquery(latest_locations.values('heading')[:1])
+        )
+
+        # Remove older locations, keeping only the latest per bus
+        BusLocation.objects.exclude(id__in=latest_locations.values('id')[:1]).delete()
+
+        # Serialize updated bus data
+        serializer = BusSerializer(active_buses, many=True)
+        return Response(serializer.data)
 
 class RouteViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -309,7 +411,7 @@ class RouteViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Route.objects.all()
     permission_classes = [IsAuthenticated]
-    # serializer_class = RouteSerializer # Uncomment and define if you create RouteSerializer
+    serializer_class = RouteSerializer # Uncomment and define if you create RouteSerializer
 
     def retrieve(self, request, pk=None):
         """
@@ -325,7 +427,6 @@ class RouteViewSet(viewsets.ReadOnlyModelViewSet):
         return Response({'route_id': route.id, 'route_name': route.name, 'points': []}) # Replace [] with actual route points
 
 # --- Registration and Authentication Views ---
-
 class CustomLoginView(LoginView):
     """
     Custom Login View using a dedicated template.
@@ -363,7 +464,6 @@ class CustomRegisterView(CreateView):
         user.save()
         return super().form_valid(form)
 
-
 class CustomPasswordResetView(PasswordResetView):
     """
     Custom Password Reset View.
@@ -392,56 +492,193 @@ class CustomPasswordResetCompleteView(PasswordResetCompleteView):
     template_name = 'registration/password_reset_complete.html' # Create this template
 
 # --- Dashboard and Management Views (Admin/Driver/Parent) ---
-
 class DashboardView(LoginRequiredMixin, TemplateView):
-    """
-    Dashboard view displaying information based on user role.
-    Requires user to be authenticated.
+    """Enhanced Dashboard with role-specific statistics
+        Dashboard view displaying information based on user role.
+        Requires user to be authenticated.
     """
     template_name = 'dashboard/index.html'
     login_url = reverse_lazy('core:login') # Redirect to login if not authenticated
-
+    
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        context['user_role'] = user.role
-
-        # Fetch data based on role
+        
+        # School locations for map
+        schools = School.objects.all()
+        context['school_locations'] = [{
+            'name': school.name,
+            'lat': school.latitude,
+            'lng': school.longitude,
+            'address': school.address
+        } for school in schools]
+        
+        # Bus data for map
         if user.role == 'admin':
-            context['total_buses'] = Bus.objects.count()
-            context['total_routes'] = Route.objects.count()
-            context['total_students'] = Student.objects.count()
-            context['recent_concerns'] = Concern.objects.order_by('-timestamp')[:5]
-            # You might want to add counts for active buses, buses in maintenance, etc.
-            context['active_buses_count'] = Bus.objects.filter(status='active').count()
-            context['in_maintenance_buses_count'] = Bus.objects.filter(status='in_maintenance').count()
-            context['open_concerns_count'] = Concern.objects.filter(status='open').count()
-
-
+            buses = Bus.objects.annotate(
+                latest_location=Subquery(
+                    BusLocation.objects.filter(bus=OuterRef('pk'))
+                    .order_by('-timestamp')
+                    .values('timestamp')[:1]
+                )
+            ).exclude(latest_location__isnull=True).order_by('-latest_location')[:10]
         elif user.role == 'parent':
-            context['children'] = user.children.all()
-            # Filter notifications for 'parent' group or 'all' group, and specifically for this user
-            context['recent_notifications'] = Notification.objects.filter(recipient_group__in=['parent', 'all'], recipients=user).order_by('-timestamp')[:5]
-            context['recent_concerns'] = Concern.objects.filter(raised_by=user).order_by('-timestamp')[:5]
-
+            buses = Bus.objects.filter(
+                assigned_route__students__parent=user
+            ).exclude(
+                Q(last_known_latitude__isnull=True) |
+                Q(last_known_longitude__isnull=True)
+            )
         elif user.role == 'driver':
-            try:
-                context['assigned_bus'] = Bus.objects.get(driver=user)
-                context['assigned_route'] = Route.objects.filter(bus=context['assigned_bus']).first()
-            except Bus.DoesNotExist:
-                context['assigned_bus'] = None
-                context['assigned_route'] = None
-            # Filter notifications for 'driver' group or 'all' group
-            context['recent_notifications'] = Notification.objects.filter(recipient_group__in=['driver', 'all']).order_by('-timestamp')[:5]
+            buses = Bus.objects.filter(driver=user)
+        else:
+            buses = Bus.objects.none()
+            
+        context['buses'] = [{
+            'id': bus.id,
+            'bus_number': bus.bus_number,
+            'status': bus.status,
+            'latitude': bus.last_known_latitude,
+            'longitude': bus.last_known_longitude,
+            'timestamp': bus.last_known_location_time,
+            'route_name': bus.route.name if bus.route else None,
+            'route_stops': bus.route.stops if bus.route else []
+        } for bus in buses]
+        
+        # Role-specific statistics
+        if user.role == 'admin':
+            context.update(self._admin_statistics(user))
+        elif user.role == 'parent':
+            context.update(self._parent_statistics(user))
+        elif user.role == 'driver':
+            context.update(self._driver_statistics(user))
+            
+        return context    
+    def _admin_statistics(self, user):
+        from django.db.models import Count, Q, Subquery, OuterRef
+        from datetime import datetime, timedelta
+        from django.utils import timezone
 
-        return context
+        now = timezone.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
+        return {
+            'stats': {
+                'total_buses': Bus.objects.count(),
+                'active_buses': Bus.objects.filter(status='active').count(),
+                'buses_in_maintenance': Bus.objects.filter(status='in_maintenance').count(),
+                'total_routes': Route.objects.count(),
+                'unassigned_routes': Route.objects.filter(bus__isnull=True).count(),
+                'total_students': Student.objects.count(),
+                'students_without_route': Student.objects.filter(assigned_route__isnull=True).count(),
+                'open_concerns': Concern.objects.filter(status='open').count(),
+                'today_notifications': Notification.objects.filter(
+                    timestamp__gte=today_start
+                ).count(),
+            },
+            'recent_activity': {
+                'recent_concerns': Concern.objects.order_by('-timestamp')[:5],
+                'recent_notifications': Notification.objects.order_by('-timestamp')[:5],
+                'bus_status_changes': BusLocation.objects.filter(
+                    # Adjust this filter to use existing fields or remove it
+                    # Example: Q(speed__gt=0)  # Example condition
+                ).order_by('-timestamp')[:5],
+            },
+            'map_buses': Bus.objects.annotate(
+                latest_location=Subquery(
+                    BusLocation.objects.filter(bus=OuterRef('pk'))
+                    .order_by('-timestamp')
+                    .values('timestamp')[:1]
+                )
+            ).exclude(latest_location__isnull=True).order_by('-latest_location')[:10]
+        }
+    
+    def _parent_statistics(self, user):
+        children = user.children.all()
+        child_routes = Route.objects.filter(students__in=children).distinct()
+        
+        return {
+            'children': children,
+            'stats': {
+                'active_buses': Bus.objects.filter(
+                    assigned_route__in=child_routes,
+                    status='active'
+                ).count(),
+                'delayed_buses': Bus.objects.filter(
+                    assigned_route__in=child_routes,
+                    status='delayed'
+                ).count(),
+                'child_routes': child_routes.count(),
+            },
+            'recent_activity': {
+                'recent_notifications': Notification.objects.filter(
+                    Q(recipient_group__in=['parent', 'all']) | Q(recipients=user)
+                ).order_by('-timestamp')[:5],
+                'recent_concerns': Concern.objects.filter(
+                    raised_by=user
+                ).order_by('-timestamp')[:5],
+            },
+            'map_buses': Bus.objects.filter(
+                assigned_route__in=child_routes
+            ).exclude(
+                Q(last_known_latitude__isnull=True) |
+                Q(last_known_longitude__isnull=True)
+            ).select_related('assigned_route', 'driver')
+        }
+    
+    def _driver_statistics(self, user):
+        try:
+            assigned_bus = Bus.objects.get(driver=user)
+            route = assigned_bus.assigned_route
+            
+            # Get today's trip history
+            today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            today_locations = BusLocation.objects.filter(
+                bus=assigned_bus,
+                timestamp__gte=today_start
+            ).order_by('timestamp')
+            
+            return {
+                'assigned_bus': assigned_bus,
+                'assigned_route': route,
+                'stats': {
+                    'today_stops': today_locations.count(),
+                    'average_speed': today_locations.aggregate(
+                        avg_speed=Avg('speed')
+                    )['avg_speed'] or 0,
+                    'route_stops': len(route.stops) if route and hasattr(route, 'stops') else 0,
+                    'last_update': assigned_bus.last_known_location_time,
+                },
+                'recent_activity': {
+                    'recent_notifications': Notification.objects.filter(
+                        Q(recipient_group__in=['driver', 'all'])
+                    ).order_by('-timestamp')[:5],
+                    'today_trips': BusLocation.objects.filter(
+                        bus=assigned_bus,
+                        timestamp__gte=today_start,
+                        is_trip_start=True
+                    ).count(),
+                },
+                'map_buses': Bus.objects.filter(
+                    driver=user
+                ).annotate(
+                    latest_location=Subquery(
+                        BusLocation.objects.filter(bus=OuterRef('pk'))
+                        .order_by('-timestamp')
+                        .values('timestamp')[:1]
+                    )
+                ).exclude(latest_location__isnull=True)
+            }
+        except Bus.DoesNotExist:
+            return {
+                'assigned_bus': None,
+                'assigned_route': None,
+                'stats': {},
+                'recent_activity': {},
+                'map_buses': Bus.objects.none()
+            }
 
 class BusTrackingView(LoginRequiredMixin, TemplateView):
-    """
-    Bus Tracking view displaying a map with bus and school locations.
-    Requires user to be authenticated.
-    """
     template_name = 'dashboard/bus_tracking.html'
     login_url = reverse_lazy('core:login')
 
@@ -449,41 +686,45 @@ class BusTrackingView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
 
-        # Filter buses based on user role for the list display
+        # School locations for map
+        schools = School.objects.all()
+        context['school_locations'] = [{
+            'name': school.name,
+            'lat': school.latitude,
+            'lng': school.longitude,
+            'address': school.address
+        } for school in schools]
+
+        # Bus data for map
         if user.role == 'admin':
-            context['buses'] = Bus.objects.filter(status='active')
+            buses = Bus.objects.all()
         elif user.role == 'parent':
-            child_routes = Route.objects.filter(students__parent=user).distinct()
-            bus_ids = child_routes.values_list('bus__id', flat=True)
-            context['buses'] = Bus.objects.filter(id__in=bus_ids, status='active')
+            buses = Bus.objects.filter(
+                assigned_route__students__parent=user
+            )
         elif user.role == 'driver':
-            try:
-                context['buses'] = Bus.objects.filter(driver=user, status='active')
-            except Bus.DoesNotExist:
-                context['buses'] = Bus.objects.none()
+            buses = Bus.objects.filter(driver=user)
         else:
-            context['buses'] = Bus.objects.none()
+            buses = Bus.objects.none()
 
-
-        context['mapbox_access_token'] = settings.MAPBOX_ACCESS_TOKEN
-
-        # School locations to be displayed on the map
-        SCHOOL_LOCATIONS = {
-            'main_campus': {'name': 'Main Campus', 'coords': (25.2048, 55.2708)},
-            'branch_1': {'name': 'Branch 1', 'coords': (25.0764, 55.1324)},
-            'branch_2': {'name': 'Branch 2', 'coords': (25.2676, 55.2927)}
-        }
-        # Convert coordinates to [lng, lat] for Mapbox
-        context['school_locations'] = [
-            {'name': loc['name'], 'lng': loc['coords'][1], 'lat': loc['coords'][0]}
-            for loc in SCHOOL_LOCATIONS.values()
-        ]
+        context['buses'] = []
+        for bus in buses:
+            latest_location = BusLocation.objects.filter(bus=bus).order_by('-timestamp').first()
+            if latest_location:
+                context['buses'].append({
+                    'id': bus.id,
+                    'bus_number': bus.bus_number,
+                    'status': bus.status,
+                    'latitude': latest_location.latitude,
+                    'longitude': latest_location.longitude,
+                    'timestamp': latest_location.timestamp,
+                    'route_name': bus.route.name if bus.route else 'Unassigned',
+                    'route_stops': bus.route.stops if bus.route else []
+                })
 
         return context
 
-
 # --- Communication Views ---
-
 class UserNotificationsView(LoginRequiredMixin, TemplateView):
     """
     View to display notifications for the authenticated user.
@@ -501,7 +742,6 @@ class UserNotificationsView(LoginRequiredMixin, TemplateView):
             # Assuming 'all' group exists and recipients is a ManyToManyField
             context['notifications'] = Notification.objects.filter(recipient_group__in=['all', user.role], recipients=user).order_by('-timestamp')
         return context
-
 
 class RaiseConcernView(LoginRequiredMixin, CreateView):
     """
@@ -533,5 +773,3 @@ class UserConcernsView(LoginRequiredMixin, TemplateView):
         else:
             context['concerns'] = Concern.objects.filter(raised_by=user).order_by('-timestamp')
         return context
-
-# DRF API views are moved to api/views.py

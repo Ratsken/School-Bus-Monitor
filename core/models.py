@@ -1,7 +1,24 @@
 # apps/accounts/models.py
 from django.contrib.auth.models import AbstractUser, Group, Permission
 from django.db import models
+from django.utils.timezone import now
 from django.contrib.contenttypes.models import ContentType
+
+class School(models.Model):
+    name = models.CharField(max_length=255)
+    address = models.TextField()
+    latitude = models.FloatField(help_text="Geographical latitude for mapping")
+    longitude = models.FloatField(help_text="Geographical longitude for mapping")
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    email = models.EmailField(blank=True, null=True)
+    principal = models.CharField(max_length=255, blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ['name']
 
 class CustomUser(AbstractUser):
     ROLE_CHOICES = (
@@ -12,14 +29,20 @@ class CustomUser(AbstractUser):
         ('staff', 'Staff'),
     )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='parent')
-    phone_number = models.CharField(max_length=20, blank=True, null=True) # For SMS notifications
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    school = models.ForeignKey(
+        School, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='users'
+    )
 
-    # Add related_name to avoid clashes with auth.User groups and user_permissions
+    # Add related_name to avoid clashes
     groups = models.ManyToManyField(
         Group,
         verbose_name='groups',
         blank=True,
-        help_text='The groups this user belongs to. A user will get all permissions granted to each of their groups.',
         related_name="custom_user_set",
         related_query_name="custom_user",
     )
@@ -27,16 +50,15 @@ class CustomUser(AbstractUser):
         Permission,
         verbose_name='user permissions',
         blank=True,
-        help_text='Specific permissions for this user.',
         related_name="custom_user_set",
         related_query_name="custom_user",
     )
 
     def __str__(self):
-        return self.username
+        return f"{self.username} ({self.school.name if self.school else 'No School'})"
 
     class Meta:
-        verbose_name = 'User' # Change verbose name in admin
+        verbose_name = 'User'
 
 class Bus(models.Model):
     STATUS_CHOICES = (
@@ -47,24 +69,42 @@ class Bus(models.Model):
     )
     bus_number = models.CharField(max_length=50, unique=True)
     driver = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_buses')
+    school = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name='buses',
+        null=True,
+        blank=True
+    )
     capacity = models.IntegerField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     last_known_latitude = models.FloatField(null=True, blank=True)
     last_known_longitude = models.FloatField(null=True, blank=True)
     last_known_location_time = models.DateTimeField(null=True, blank=True)
+    last_known_speed = models.FloatField(null=True, blank=True)  # ✅ Add this field
+    last_known_heading = models.FloatField(null=True, blank=True)  # ✅ Add this field
     last_maintenance_date = models.DateField(null=True, blank=True)
     next_maintenance_due = models.DateField(null=True, blank=True)
     maintenance_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
 
     def __str__(self):
-        return self.bus_number
+        return f"{self.bus_number} ({self.school.name if self.school else 'No School'})"
+
+    @property
+    def current_location(self):
+        if self.last_known_latitude and self.last_known_longitude:
+            return {
+                'lat': self.last_known_latitude,
+                'lng': self.last_known_longitude,
+                'timestamp': self.last_known_location_time
+            }
+        return None
+
     @property
     def route(self):
-        """Helper property to get the route associated with this bus."""
         return Route.objects.filter(bus=self).first()
     
     class Meta:
-        app_label = 'core'
         verbose_name_plural = "Buses"
         permissions = [
             ("can_assign_driver", "Can assign a driver to a bus"),
@@ -72,17 +112,24 @@ class Bus(models.Model):
         ]
 
 class Route(models.Model):
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=100)
     bus = models.OneToOneField(Bus, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_route')
-    # Add fields for schedule (e.g., start_time, end_time), estimated_duration, etc.
-    # Example:
+    school = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name='routes',
+        null=True,
+        blank=True
+    )
     start_time = models.TimeField(null=True, blank=True)
     end_time = models.TimeField(null=True, blank=True)
+    stops = models.JSONField(default=list, blank=True)  # For storing route waypoints
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.school.name if self.school else 'No School'})"
 
     class Meta:
+        unique_together = ('name', 'school')
         permissions = [
             ("can_assign_bus_to_route", "Can assign a bus to a route"),
         ]
@@ -92,11 +139,20 @@ class Student(models.Model):
     last_name = models.CharField(max_length=100)
     parent = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='children')
     assigned_route = models.ForeignKey(Route, on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
-    # Add fields for student ID, grade, etc.
+    school = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name='students',
+        null=True,
+        blank=True
+    )
     student_id = models.CharField(max_length=50, unique=True, null=True, blank=True)
+    grade_level = models.CharField(max_length=20, blank=True, null=True)
+    home_address = models.TextField(blank=True, null=True)
+    pickup_location = models.JSONField(null=True, blank=True)  # {lat: x, lng: y}
 
     def __str__(self):
-        return f"{self.first_name} {self.last_name}"
+        return f"{self.first_name} {self.last_name} ({self.school.name if self.school else 'No School'})"
 
     class Meta:
         permissions = [
@@ -104,16 +160,19 @@ class Student(models.Model):
             ("can_view_student_details", "Can view detailed student information"),
         ]
 
-
 class BusLocation(models.Model):
     bus = models.ForeignKey(Bus, on_delete=models.CASCADE)
     latitude = models.FloatField()
     longitude = models.FloatField()
-    timestamp = models.DateTimeField(auto_now_add=True)
-    speed = models.FloatField(null=True, blank=True)  # Add this line
+    timestamp = models.DateTimeField(default=now)
+    speed = models.FloatField(null=True, blank=True)
+    heading = models.FloatField(null=True, blank=True)  # Direction in degrees
+    is_trip_start = models.BooleanField(default=False)  # Add this field
+    is_trip_end = models.BooleanField(default=False)   # Add this field
 
     def __str__(self):
         return f"{self.bus.bus_number} at ({self.latitude}, {self.longitude})"
+
     class Meta:
         ordering = ['-timestamp']
         permissions = [
